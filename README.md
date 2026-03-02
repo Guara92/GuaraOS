@@ -8,6 +8,8 @@ Package list is taken from https://github.com/CachyOS/cachyos-calamares/blob/cac
 
 Some packages (like Firefox) are excluded from the system while providing alternative methods for getting them like Flatpak and Distrobox. You can still use `pacman` though, but you'd need to run `sudo bootc usroverlay` first (those changes would be lost after reboot/shutdown).
 
+TODO: possibly migrate to mkosi
+
 ## Known issues
 
 - Image is rechunked with new tool [chunkah](https://github.com/coreos/chunkah), however it's highly experimental and it suffers from [uneven distribution of layers](https://github.com/coreos/chunkah/issues/66) compared to rpm-ostree's [`build-chunked-oci`](https://coreos.github.io/rpm-ostree/build-chunked-oci) function which, you guessed it, can be only used in RPM-based distros, hence is why I chose 256 layers instead of previously picked 96. I would still prefer this over one large layer...
