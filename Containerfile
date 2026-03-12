@@ -217,12 +217,12 @@ RUN systemd-sysusers
 #     printf '[main]\ndns=systemd-resolved\n' > /etc/NetworkManager/conf.d/dns.conf
 
 # Fix permissions for polkit helper
-RUN chmod 4755 /usr/lib/polkit-1/polkit-agent-helper-1 && \
-    chmod 4755 /usr/bin/newuidmap && \
-    chmod 4755 /usr/bin/newgidmap && \
-    chmod 4755 /usr/bin/pkexec && \
-    chmod 0750 /etc/polkit-1/rules.d && \
-    chown root:polkitd /etc/polkit-1/rules.d
+# RUN chmod 4755 /usr/lib/polkit-1/polkit-agent-helper-1 && \
+#     chmod 4755 /usr/bin/newuidmap && \
+#     chmod 4755 /usr/bin/newgidmap && \
+#     chmod 4755 /usr/bin/pkexec && \
+#     chmod 0750 /etc/polkit-1/rules.d && \
+#     chown root:polkitd /etc/polkit-1/rules.d
 
 # Disable SELinux labeling in Podman to prevent mount errors on non-SELinux kernels
 RUN mkdir -p /etc/containers/containers.conf.d && \

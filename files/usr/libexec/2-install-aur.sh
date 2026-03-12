@@ -21,10 +21,10 @@ cd scopebuddy-git
 makepkg -si --noconfirm --skipinteg
 
 # Install OpenRGB udev rules (Essential for OpenRGB device detection)
-cd /var/home/builduser
-git clone https://aur.archlinux.org/openrgb-udev-rules.git
-cd openrgb-udev-rules
-makepkg -si --noconfirm
+# cd /var/home/builduser
+# git clone https://aur.archlinux.org/openrgb-udev-rules.git
+# cd openrgb-udev-rules
+# makepkg -si --noconfirm
 EOF
 
 # Clean up: remove the build user and its home directory
