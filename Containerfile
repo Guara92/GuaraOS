@@ -3,7 +3,37 @@
 # A high-performance, desktop-focused atomic image based on CachyOS.
 # Derived from cachyos-deckify-bootc.
 
-# Stage 1: Bootstrap a basic Arch Linux environment
+# Stage 1: Build AUR packages in a separate stage to keep the final image clean
+# Default to v3 if nothing is passed
+ARG TARGET_CPU_MARCH=v3
+
+# Logic to map znver4 to v4 for the base image selection
+# Note: If you pass znver4, this stage will pull cachyos-v4
+FROM docker.io/cachyos/cachyos-${TARGET_CPU_MARCH/znver4/v4} AS aur_builder
+
+USER root
+
+# Minimal setup: just enough to build packages
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    pacman-key --init && \
+    pacman-key --populate archlinux cachyos && \
+    # 2. Update the keyring package specifically before anything else
+    pacman -Sy --noconfirm --needed cachyos-keyring archlinux-keyring && \
+    pacman -Sy --noconfirm --needed base-devel git sudo && \
+    useradd -m builduser && \
+    echo "builduser ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers && \
+    mkdir -p /home/builduser/packages && \
+    chown -R builduser:builduser /home/builduser
+
+# Build Scopebuddy
+RUN --mount=type=cache,target=/var/cache/pacman/pkg \
+    git clone https://aur.archlinux.org/scopebuddy-git.git /tmp/scopebuddy && \
+    chown -R builduser:builduser /tmp/scopebuddy && \
+    cd /tmp/scopebuddy && \
+    # We set PKGDEST as an env var instead of a flag
+    sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
+
+# Stage 2: Bootstrap a basic Arch Linux environment
 FROM cgr.dev/chainguard/wolfi-base:latest AS rootfs
 
 # Wolfi is rolling, so we don't need to pin this anymore
@@ -19,9 +49,10 @@ RUN apk add gnutar zstd curl && \
     apk del gnutar zstd curl && \
     apk cache clean
 
-# Stage 2: Build the OS
+# Stage 3: Build the OS
 FROM scratch AS system
 COPY --from=rootfs /root.x86_64/ /
+ARG TARGET_CPU_MARCH
 
 # Set default locale
 ENV LANG=en_US.UTF-8
@@ -53,13 +84,14 @@ COPY files/etc /etc
 
 # Initialize keyrings and transition to CachyOS base
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman-key --init && \
     pacman-key --populate && \
     pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com && \
     pacman-key --lsign-key F3B607488DB35A47 && \
     pacman -Sy --noconfirm --needed cachyos-keyring cachyos-mirrorlist cachyos-v3-mirrorlist cachyos-v4-mirrorlist cachyos-hooks chwd cachyos-rate-mirrors lsb-release && \
     cachyos-rate-mirrors && \
-    pacman -Syu --noconfirm && pacman -Scc --noconfirm
+    pacman -Syu --noconfirm
 
 # Generate en_US.UTF-8 locale
 RUN sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
@@ -74,11 +106,12 @@ RUN --mount=type=tmpfs,dst=/run \
 
 # Add Chaotic-AUR repository for additional pre-built AUR packages
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com && \
     pacman-key --lsign-key 3056513887B78AEB && \
     pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' && \
     echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" >> /etc/pacman.conf && \
-    pacman -Syu --noconfirm && pacman -Scc --noconfirm
+    pacman -Syu --noconfirm
 
 # dracut errors out on missing i18n_vars
 # https://github.com/dracutdevs/dracut/issues/868
@@ -86,8 +119,8 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
     echo 'i18n_vars="/usr/share/kbd/consolefonts  /usr/share/kbd/keymaps"' >> /usr/lib/dracut/dracut.conf.d/boppos-cachyos.conf
 
 # Set CPU-specific repository based on build argument
-ARG TARGET_CPU_MARCH
-RUN /usr/libexec/1-set-cpu-repo.sh "$TARGET_CPU_MARCH"
+RUN --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
+    /usr/libexec/1-set-cpu-repo.sh "$TARGET_CPU_MARCH"
 
 # Remove base Arch kernel if it exists
 RUN --mount=type=tmpfs,dst=/run \
@@ -99,99 +132,121 @@ RUN --mount=type=tmpfs,dst=/run \
 
 # Install the standard desktop kernel and core bootc components
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
         linux-cachyos linux-cachyos-headers \
         systemd systemd-sysvcompat \
         dbus dbus-broker-units dbus-glib glib2 polkit shadow \
         dracut ostree bootc skopeo \
         amd-ucode intel-ucode \
-        linux-firmware sof-firmware && pacman -Scc --noconfirm
+        linux-firmware sof-firmware
 
 # Install Graphics & Drivers
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
         mesa lib32-mesa mesa-utils vulkan-icd-loader \
-        vulkan-radeon lib32-vulkan-radeon vulkan-tools && pacman -Scc --noconfirm
+        vulkan-radeon lib32-vulkan-radeon vulkan-tools
 
 # Install Desktop Environment, Fonts & Power Management
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
         ttf-ms-fonts ttf-dejavu ttf-bitstream-vera noto-fonts noto-fonts-emoji \
         cachyos-settings cachyos-kde-settings cachyos-micro-settings cachyos-wallpapers \
-        power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs && pacman -Scc --noconfirm
+        power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs \
+        mousetweaks radeontool
 
 # Install Gaming Core (Launchers & Compatibility)
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
         steam lutris heroic-games-launcher-bin gamescope xdotool yad \
         cachyos-gaming-applications faugus-launcher umu-launcher \
-        proton-cachyos wine-cachyos winboat && pacman -Scc --noconfirm
+        proton-cachyos wine-cachyos winboat
 
 # Install Gaming Utilities
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
         sunshine lact coolercontrol openrgb openrgb-plugin-effects-git wireplumber nvtop \
         mangohud goverlay pipewire-pulse libdvdcss gst-libav mpv-git ffmpeg pavucontrol \
-        inputplumber lsfg-vk game-devices-udev udev-joystick-blacklist-git && pacman -Scc --noconfirm
+        inputplumber lsfg-vk game-devices-udev udev-joystick-blacklist-git
 
 # Install Development Base & CLI Tools
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
         base-devel meld base-devel procps-ng curl file git \
         git byobu openssh openssl curl wget paru \
         nano micro vi unrar unzip xz nfs-utils \
-        btop konsave && pacman -Scc --noconfirm
+        btop konsave
 
 # Install Development Languages
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
         nodejs npm rust python-pip python-pipx \
-        cargo-binstall cargo-update && pacman -Scc --noconfirm
-
-# Install Heavy Development Tools
-RUN --mount=type=tmpfs,dst=/run \
-    pacman -Sy --noconfirm --needed \
-        visual-studio-code-bin && pacman -Scc --noconfirm
+        cargo-binstall cargo-update visual-studio-code-bin
 
 # Install Shell Environment
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
-        bash-completion zsh-completions starship zoxide eza && pacman -Scc --noconfirm
+        bash-completion zsh-completions starship zoxide eza \
+        iotop-c smartmontools
 
 # Install Networking & VPNs
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
         networkmanager networkmanager-openvpn wpa_supplicant iwd ethtool dnsutils \
         modemmanager usb_modeswitch nss-mdns bluez bluez-utils bluez-libs \
         openvpn wireguard-tools pptpclient helium-browser-bin \
-        mullvad-vpn mullvad-vpn-daemon cloudflare-warp-bin tailscale && pacman -Scc --noconfirm
+        mullvad-vpn mullvad-vpn-daemon cloudflare-warp-bin tailscale
 
 # Install Virtualization & Containers
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
-        podman podman-compose docker docker-compose distrobox flatpak fwupd && pacman -Scc --noconfirm
+        podman podman-compose docker docker-compose distrobox flatpak fwupd
 
 # Install sched-ext packages
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed scx-scheds-git scx-tools-git scx-manager \
-    ananicy-cpp cachyos-ananicy-rules gamescope-session-cachyos && pacman -Scc --noconfirm
+        ananicy-cpp cachyos-ananicy-rules gamescope-session-cachyos
 
 # Install Desktop Environment & Display Manager
 RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
-        plasma-desktop plasma-workspace xorg-xwayland \
-        qt5-wayland qt6-wayland cachyos-emerald-kde-theme-git cachyos-plymouth-theme \
-        dolphin konsole sddm sddm-kcm cachyos-themes-sddm \
-        powerdevil kscreen breeze-gtk ark ffmpegthumbnailer \
-        polkit polkit-kde-agent udisks2 ptyxis \
-        xdg-desktop-portal xdg-desktop-portal-kde && pacman -Scc --noconfirm
+        plasma-desktop plasma-workspace xorg-xwayland plasma-pa plasma-nm \
+        qt5-wayland qt6-wayland breeze-gtk cachyos-emerald-kde-theme-git cachyos-plymouth-theme \
+        cachyos-plymouth-bootanimation dolphin konsole sddm sddm-kcm cachyos-themes-sddm \
+        powerdevil kscreen kdeconnect ark ffmpegthumbnailer \
+        polkit polkit-kde-agent kwallet-pam udisks2 ptyxis \
+        xdg-desktop-portal xdg-desktop-portal-kde \
+        ffmpegthumbs kdegraphics-thumbnailers kimageformats qt6-imageformats \
+        kio-extras kio-fuse kio-admin kde-gtk-config colord-kde \
+        flatpak-kcm partitionmanager plasma-disks plasma-systemmonitor spectacle
 
 # Install AUR packages
-RUN /usr/libexec/2-install-aur.sh
+# RUN --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
+#     /usr/libexec/2-install-aur.sh
+
+# Instead of running a script, we copy the pre-built packages from the builder stage
+# 1. Copy the built packages
+COPY --from=aur_builder /home/builduser/packages/ /tmp/aur-pkgs/
+
+# 2. Install the scopebuddy .zst package
+RUN --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
+    pacman -U --noconfirm /tmp/aur-pkgs/scopebuddy-git*.pkg.tar.zst
 
 # Install and configure Waydroid for Android app support
 RUN --mount=type=tmpfs,dst=/run \
-    pacman -Sy --noconfirm --needed waydroid && pacman -Scc --noconfirm
+    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
+    pacman -Sy --noconfirm --needed waydroid
 
 # Configure Flatpak by adding the Flathub remote
 RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
@@ -237,6 +292,7 @@ RUN systemctl enable NetworkManager.service && \
     systemctl enable ModemManager.service && \
     systemctl enable ananicy-cpp.service && \
     systemctl enable scx_loader.service && \
+    systemctl enable inputplumber.service && \
     systemctl enable brew-setup.service &&\
     systemctl enable docker.service && \
     systemctl enable sddm.service && \
@@ -291,6 +347,3 @@ RUN rm -f /README.md
 
 # Set bootc label for compatibility
 LABEL containers.bootc=1
-
-# Clean pacman cache
-RUN pacman -Scc --noconfirm

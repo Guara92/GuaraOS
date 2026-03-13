@@ -94,6 +94,20 @@ jobs:
           sep-tags: " "
           sep-annotations: " "
 
+      - name: Cache Pacman Packages
+        uses: actions/cache@v4
+        with:
+          path: pacman-cache
+          key: pacman-${{ env.DEFAULT_TAG }}-${{ github.run_id }}
+          restore-keys: |
+            pacman-${{ env.DEFAULT_TAG }}-
+
+      - name: Prepare and Inject Cache
+        run: |
+          mkdir -p pacman-cache
+          # Replace type=cache with type=bind pointing to our restored cache directory
+          sed -i "s|type=cache,target=/usr/lib/sysimage/cache/pacman/pkg|type=bind,source=$(pwd)/pacman-cache,target=/usr/lib/sysimage/cache/pacman/pkg,rw|g" Containerfile
+
       - name: Build Image
         id: build_image
         env:
@@ -171,3 +185,7 @@ jobs:
           REMOTE_IMAGE_DIGEST: ${{ steps.push.outputs.remote_image_digest }}
           COSIGN_EXPERIMENTAL: false
           COSIGN_PRIVATE_KEY: ${{ secrets.SIGNING_SECRET }}
+
+      - name: Fix Cache Permissions
+        if: always()
+        run: sudo chown -R $USER:$USER pacman-cache

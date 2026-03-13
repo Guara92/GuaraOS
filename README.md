@@ -4,6 +4,8 @@
 
 BoppOS CachyOS is a custom-built OS designed for high-end desktop gaming and development. It's a fork of `cachyos-deckify-bootc`, transformed from a handheld-oriented system into a powerful, desktop-first experience.
 
+This is all very experimental. So use at your own risk.
+
 ---
 
 ## Key Features
@@ -31,7 +33,7 @@ You can build the BoppOS image using any container tool like `podman` or `docker
 This build is compatible with most modern x86-64 hardware and is suitable for sharing or for use in CI/CD environments.
 
 ```bash
-podman build -t boppos-cachyos:latest .
+podman build -t cachyos-boppos-bootc:latest .
 ```
 
 ### v4 Build (x86-64-v4)
@@ -39,7 +41,7 @@ podman build -t boppos-cachyos:latest .
 This enables optimizations for a wide range of modern CPUs (e.g., Intel Haswell and newer, AMD Excavator and newer) that support the x86-64-v4 microarchitecture level.
 
 ```bash
-podman build --build-arg TARGET_CPU_MARCH=v4 -t boppos-cachyos-v4:latest .
+podman build --build-arg TARGET_CPU_MARCH=v4 -t cachyos-boppos-bootc:v4 .
 ```
 
 ### Optimized Build (znver4)
@@ -47,7 +49,7 @@ podman build --build-arg TARGET_CPU_MARCH=v4 -t boppos-cachyos-v4:latest .
 If you are building on and for a system with an AMD Ryzen 7000 series CPU (or newer), you can enable native `znver4` optimizations for maximum performance.
 
 ```bash
-podman build --build-arg TARGET_CPU_MARCH=znver4 -t boppos-cachyos-znver4:latest .
+podman build --build-arg TARGET_CPU_MARCH=znver4 -t cachyos-boppos-bootc:znver4 .
 ```
 
 ## Installation & Switching
@@ -67,7 +69,7 @@ A typical installation command would look like this:
 
 ```bash
 # Example:
-bootc install to-disk --image your-registry/boppos-cachyos:latest /dev/sdX
+bootc install to-disk --image ghcr.io/ripps818/cachyos-boppos-bootc:latest /dev/sdX
 ```
 
 ### Switching from an Existing bootc OS (e.g., Bazzite)
@@ -77,7 +79,7 @@ If you are already running a `bootc`-based system, you can switch to BoppOS dire
 To switch, run the following command, pointing to the BoppOS image in your registry:
 
 ```bash
-sudo bootc switch your-registry/boppos-cachyos:latest
+sudo bootc switch ghcr.io/ripps818/cachyos-boppos-bootc:latest
 ```
 
 Your system will download the new image and stage it for the next boot.

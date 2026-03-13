@@ -16,4 +16,6 @@ flatpak install --user -y flathub \
     io.github.flattool.Warehouse \
     com.github.tchx84.Flatseal \
     com.bitwarden.desktop \
-    com.vysp3r.ProtonPlus
+    com.vysp3r.ProtonPlus \
+    org.kde.gwenview \
+    org.kde.kcalc

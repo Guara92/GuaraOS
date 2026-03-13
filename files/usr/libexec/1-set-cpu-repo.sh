@@ -57,6 +57,6 @@ pacman -Syy
 
 # Reinstall all base packages from the newly enabled repos to get optimized versions
 echo "Reinstalling all packages to apply CPU optimizations..."
-pacman -Qqn | pacman -S --noconfirm - && pacman -Scc --noconfirm
+pacman -Qqn | pacman -S --noconfirm -
 
 echo "CPU optimization step complete."
