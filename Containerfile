@@ -7,9 +7,9 @@
 # STAGE 1: AUR Builder
 # ==========================================
 ARG TARGET_CPU_MARCH=v3
+ARG BASE_IMAGE_TAG=v3
 
-# Logic to map znver4 to v4 for the base image selection
-FROM docker.io/cachyos/cachyos-${TARGET_CPU_MARCH/znver4/v4} AS aur_builder
+FROM docker.io/cachyos/cachyos-${BASE_IMAGE_TAG} AS aur_builder
 
 USER root
 
@@ -35,9 +35,9 @@ RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/c
 # ==========================================
 # STAGE 2: System Build
 # ==========================================
-FROM docker.io/cachyos/cachyos-${TARGET_CPU_MARCH/znver4/v4} AS system
+FROM docker.io/cachyos/cachyos-${BASE_IMAGE_TAG} AS system
 ARG TARGET_CPU_MARCH
-
+ARG BASE_IMAGE_TAG
 ENV LANG=en_US.UTF-8
 
 # Copy Homebrew

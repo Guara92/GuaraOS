@@ -102,20 +102,31 @@ jobs:
 
       - name: Build Image
         id: build_image
-        if: env.SKIP_BUILD != 'true'
         env:
           META_LABELS: ${{ steps.metadata.outputs.labels }}
         run: |
           set -x
 
+          # Calculate the base image tag. 
+          # If DEFAULT_TAG is znver4, BASE_TAG becomes v4. Otherwise, they match.
+          MARCH="${{ env.DEFAULT_TAG }}"
+          if [ "$MARCH" == "znver4" ]; then
+            BASE_TAG="v4"
+          else
+            BASE_TAG="$MARCH"
+          fi
+
           # get labels from metadata action
           while IFS= read -r label; do
-          if [[ -n "$label" ]]; then
-            BUILD_ARGS+=("--label" "$label")
-          fi
+            if [[ -n "$label" ]]; then
+              BUILD_ARGS+=("--label" "$label")
+            fi
           done <<< "$META_LABELS"
 
-          sudo podman build "${BUILD_ARGS[@]}" --isolation=chroot --build-arg TARGET_CPU_MARCH="znver4" --tag "$IMAGE_NAME:$DEFAULT_TAG" .
+          sudo podman build "${BUILD_ARGS[@]}" \
+            --build-arg TARGET_CPU_MARCH="$MARCH" \
+            --build-arg BASE_IMAGE_TAG="$BASE_TAG" \
+            --tag "$IMAGE_NAME:$DEFAULT_TAG" .
 
       - name: Rechunk Image
         if: env.SKIP_BUILD != 'true'
