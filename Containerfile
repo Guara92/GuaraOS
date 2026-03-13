@@ -3,12 +3,12 @@
 # A high-performance, desktop-focused atomic image based on CachyOS.
 # Derived from cachyos-deckify-bootc.
 
-# Stage 1: Build AUR packages in a separate stage to keep the final image clean
-# Default to v3 if nothing is passed
+# ==========================================
+# STAGE 1: AUR Builder
+# ==========================================
 ARG TARGET_CPU_MARCH=v3
 
 # Logic to map znver4 to v4 for the base image selection
-# Note: If you pass znver4, this stage will pull cachyos-v4
 FROM docker.io/cachyos/cachyos-${TARGET_CPU_MARCH/znver4/v4} AS aur_builder
 
 USER root
@@ -17,7 +17,6 @@ USER root
 RUN --mount=type=cache,target=/var/cache/pacman/pkg \
     pacman-key --init && \
     pacman-key --populate archlinux cachyos && \
-    # 2. Update the keyring package specifically before anything else
     pacman -Sy --noconfirm --needed cachyos-keyring archlinux-keyring && \
     pacman -Sy --noconfirm --needed base-devel git sudo && \
     useradd -m builduser && \
@@ -30,197 +29,91 @@ RUN --mount=type=cache,target=/var/cache/pacman/pkg \
     git clone https://aur.archlinux.org/scopebuddy-git.git /tmp/scopebuddy && \
     chown -R builduser:builduser /tmp/scopebuddy && \
     cd /tmp/scopebuddy && \
-    # We set PKGDEST as an env var instead of a flag
     sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
 
-# Stage 2: Bootstrap a basic Arch Linux environment
-FROM cgr.dev/chainguard/wolfi-base:latest AS rootfs
-
-# Wolfi is rolling, so we don't need to pin this anymore
-# ENV VERSION="2026.03.01"
-# ENV SHASUM="eb52fd74f466658f039f2f7fe9bced015d29b23c569e72c5abb7015bdb6d5c7f"
-
-RUN apk add gnutar zstd curl && \
-    curl -fLOJ --retry 3 https://fastly.mirror.pkgbuild.com/iso/latest/archlinux-bootstrap-x86_64.tar.zst && \
-    # echo "$SHASUM archlinux-bootstrap-x86_64.tar.zst" > sha256sum.txt && \
-    # sha256sum -c sha256sum.txt || exit 1 && \
-    tar -xf /archlinux-bootstrap-x86_64.tar.zst --numeric-owner && \
-    rm -f /archlinux-bootstrap-x86_64.tar.zst && \
-    apk del gnutar zstd curl && \
-    apk cache clean
-
-# Stage 3: Build the OS
-FROM scratch AS system
-COPY --from=rootfs /root.x86_64/ /
+# ==========================================
+# STAGE 2: System Build
+# ==========================================
+FROM docker.io/cachyos/cachyos-${TARGET_CPU_MARCH/znver4/v4} AS system
 ARG TARGET_CPU_MARCH
 
-# Set default locale
 ENV LANG=en_US.UTF-8
 
+# Copy Homebrew
 COPY --from=ghcr.io/ublue-os/brew:latest /system_files /
-
-# put homebrew to its own layer
 RUN setfattr -n user.component -v "homebrew" "/usr/share/homebrew.tar.zst"
 
-RUN sed -i 's/^#Server/Server/' /etc/pacman.d/mirrorlist
-
-# replacing with cachyos' pacman config and mirrorlists
-RUN rm -f /etc/pacman.conf && \
-    curl --retry 3 https://raw.githubusercontent.com/CachyOS/docker/refs/heads/master/pacman.conf -o /etc/pacman.conf && \
-    curl --retry 3 https://raw.githubusercontent.com/CachyOS/CachyOS-PKGBUILDS/master/cachyos-mirrorlist/cachyos-mirrorlist -o /etc/pacman.d/cachyos-mirrorlist
-
+# Ensure the log file exists
 RUN touch /var/log/pacman.log
-# Move everything from `/var` to `/usr/lib/sysimage` so behavior around pacman remains the same on `bootc usroverlay`'d systems
+
+# Move pacman directories for bootc/usroverlay compatibility
 RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | xargs -n1 sh -c 'mkdir -p "/usr/lib/sysimage/$(dirname $(echo $1 | sed "s@/var/@@"))" && mv -v "$1" "/usr/lib/sysimage/$(echo "$1" | sed "s@/var/@@")"' '' && \
     sed -i -e "/= *\/var/ s/^#//" -e "s@= */var@= /usr/lib/sysimage@g" -e "/DownloadUser/d" -e "/^#IgnorePkg/a IgnorePkg = mesa-git lib32-mesa-git" /etc/pacman.conf
 
-# assign user.component to every package
-# script by hec
-RUN mkdir -p /usr/libexec
-COPY --chmod=0755 files/usr/libexec /usr/libexec
+# This guarantees the user.component hook is present and fires 
+# during the master pacman installation block below.
 COPY files/usr/share /usr/share
-COPY files/usr/lib /usr/lib
 COPY files/etc /etc
+COPY files/usr/lib /usr/lib
 
-# Initialize keyrings and transition to CachyOS base
+# Copy just the CPU script so we can use it immediately
+COPY --chmod=0755 files/usr/libexec/1-set-cpu-repo.sh /usr/libexec/
+
+# Initialize keyrings
 RUN --mount=type=tmpfs,dst=/run \
     --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman-key --init && \
-    pacman-key --populate && \
+    pacman-key --populate archlinux cachyos && \
     pacman-key --recv-keys F3B607488DB35A47 --keyserver keyserver.ubuntu.com && \
     pacman-key --lsign-key F3B607488DB35A47 && \
     pacman -Sy --noconfirm --needed cachyos-keyring cachyos-mirrorlist cachyos-v3-mirrorlist cachyos-v4-mirrorlist cachyos-hooks chwd cachyos-rate-mirrors lsb-release && \
-    cachyos-rate-mirrors && \
-    pacman -Syu --noconfirm
+    cachyos-rate-mirrors
 
 # Generate en_US.UTF-8 locale
 RUN sed -i 's/^#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen && \
     locale-gen && \
     echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
-# add a repo for bootc by hec
+# Add custom Bootc repo
 RUN --mount=type=tmpfs,dst=/run \
     pacman-key --recv-key 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB --keyserver keyserver.ubuntu.com && \
     pacman-key --lsign-key 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB && \
     echo -e '[bootc]\nSigLevel = Required\nServer=https://github.com/hecknt/arch-bootc-pkgs/releases/download/$repo' >> /etc/pacman.conf
 
-# Add Chaotic-AUR repository for additional pre-built AUR packages
+# Add Chaotic-AUR repository
 RUN --mount=type=tmpfs,dst=/run \
     --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman-key --recv-key 3056513887B78AEB --keyserver keyserver.ubuntu.com && \
     pacman-key --lsign-key 3056513887B78AEB && \
     pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' && \
-    echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" >> /etc/pacman.conf && \
-    pacman -Syu --noconfirm
+    echo -e "\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist" >> /etc/pacman.conf
 
-# dracut errors out on missing i18n_vars
-# https://github.com/dracutdevs/dracut/issues/868
+# Dracut i18n fix
 RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
     echo 'i18n_vars="/usr/share/kbd/consolefonts  /usr/share/kbd/keymaps"' >> /usr/lib/dracut/dracut.conf.d/boppos-cachyos.conf
 
-# Set CPU-specific repository based on build argument
+# Set CPU-specific repository and perform the system upgrade
 RUN --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    /usr/libexec/1-set-cpu-repo.sh "$TARGET_CPU_MARCH"
+    /usr/libexec/1-set-cpu-repo.sh "$TARGET_CPU_MARCH" && \
+    pacman -Syu --noconfirm
 
-# Remove base Arch kernel if it exists
+# Remove base kernels/handheld packages if present in the base image
 RUN --mount=type=tmpfs,dst=/run \
-    pacman -Rns --noconfirm linux || echo "Base linux kernel not found, skipping."
+    pacman -Rns --noconfirm linux linux-cachyos-deckify linux-cachyos-deckify-headers cachyos-handheld plasma-login-manager || echo "Unwanted base packages not found, skipping."
 
-# Remove handheld-specific packages if they exist
-RUN --mount=type=tmpfs,dst=/run \
-    pacman -Rns --noconfirm linux-cachyos-deckify linux-cachyos-deckify-headers cachyos-handheld plasma-login-manager || echo "Handheld packages not found, skipping."
-
-# Install the standard desktop kernel and core bootc components
+# ==========================================
+# MASTER PACKAGE INSTALLATION
+# ==========================================
 RUN --mount=type=tmpfs,dst=/run \
     --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
     pacman -Sy --noconfirm --needed \
-        linux-cachyos linux-cachyos-headers \
-        systemd systemd-sysvcompat \
+        # --- System Core ---
+        linux-cachyos linux-cachyos-headers systemd systemd-sysvcompat \
         dbus dbus-broker-units dbus-glib glib2 polkit shadow \
-        dracut ostree bootc skopeo \
-        amd-ucode intel-ucode \
-        linux-firmware sof-firmware
-
-# Install Graphics & Drivers
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        mesa lib32-mesa mesa-utils vulkan-icd-loader \
-        vulkan-radeon lib32-vulkan-radeon vulkan-tools
-
-# Install Desktop Environment, Fonts & Power Management
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        ttf-ms-fonts ttf-dejavu ttf-bitstream-vera noto-fonts noto-fonts-emoji \
-        cachyos-settings cachyos-kde-settings cachyos-micro-settings cachyos-wallpapers \
-        power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs \
-        mousetweaks radeontool
-
-# Install Gaming Core (Launchers & Compatibility)
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        steam lutris heroic-games-launcher-bin gamescope xdotool yad \
-        cachyos-gaming-applications faugus-launcher umu-launcher \
-        proton-cachyos wine-cachyos winboat
-
-# Install Gaming Utilities
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        sunshine lact coolercontrol openrgb openrgb-plugin-effects-git wireplumber nvtop \
-        mangohud goverlay pipewire-pulse libdvdcss gst-libav mpv-git ffmpeg pavucontrol \
-        inputplumber lsfg-vk game-devices-udev udev-joystick-blacklist-git
-
-# Install Development Base & CLI Tools
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        base-devel meld base-devel procps-ng curl file git \
-        git byobu openssh openssl curl wget paru \
-        nano micro vi unrar unzip xz nfs-utils \
-        btop konsave
-
-# Install Development Languages
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        nodejs npm rust python-pip python-pipx \
-        cargo-binstall cargo-update visual-studio-code-bin
-
-# Install Shell Environment
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        bash-completion zsh-completions starship zoxide eza \
-        iotop-c smartmontools
-
-# Install Networking & VPNs
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        networkmanager networkmanager-openvpn wpa_supplicant iwd ethtool dnsutils \
-        modemmanager usb_modeswitch nss-mdns bluez bluez-utils bluez-libs \
-        openvpn wireguard-tools pptpclient helium-browser-bin \
-        mullvad-vpn mullvad-vpn-daemon cloudflare-warp-bin tailscale
-
-# Install Virtualization & Containers
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
-        podman podman-compose docker docker-compose distrobox flatpak fwupd
-
-# Install sched-ext packages
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed scx-scheds-git scx-tools-git scx-manager \
-        ananicy-cpp cachyos-ananicy-rules gamescope-session-cachyos
-
-# Install Desktop Environment & Display Manager
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed \
+        dracut ostree bootc skopeo amd-ucode intel-ucode linux-firmware sof-firmware \
+        # --- Graphics & Drivers ---
+        mesa lib32-mesa mesa-utils vulkan-icd-loader vulkan-radeon lib32-vulkan-radeon vulkan-tools \
+        # --- Desktop Environment & Display Manager ---
         plasma-desktop plasma-workspace xorg-xwayland plasma-pa plasma-nm \
         qt5-wayland qt6-wayland breeze-gtk cachyos-emerald-kde-theme-git cachyos-plymouth-theme \
         cachyos-plymouth-bootanimation dolphin konsole sddm sddm-kcm cachyos-themes-sddm \
@@ -229,62 +122,70 @@ RUN --mount=type=tmpfs,dst=/run \
         xdg-desktop-portal xdg-desktop-portal-kde \
         ffmpegthumbs kdegraphics-thumbnailers kimageformats qt6-imageformats \
         kio-extras kio-fuse kio-admin kde-gtk-config colord-kde \
-        flatpak-kcm partitionmanager plasma-disks plasma-systemmonitor spectacle
+        flatpak-kcm partitionmanager plasma-disks plasma-systemmonitor spectacle \
+        # --- Fonts & Themes ---
+        ttf-ms-fonts ttf-dejavu ttf-bitstream-vera noto-fonts noto-fonts-emoji noto-fonts-cjk \
+        ttf-jetbrains-mono ttf-fira-code ttf-cascadia-code \
+        cachyos-settings cachyos-kde-settings cachyos-micro-settings cachyos-wallpapers \
+        # --- Power & Hardware Management ---
+        power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs mousetweaks radeontool \
+        # --- Gaming Core & Utilities ---
+        steam lutris heroic-games-launcher-bin gamescope xdotool yad \
+        cachyos-gaming-applications faugus-launcher umu-launcher proton-cachyos wine-cachyos winboat \
+        sunshine lact coolercontrol openrgb openrgb-plugin-effects-git wireplumber nvtop \
+        mangohud goverlay pipewire-pulse libdvdcss gst-libav mpv-git ffmpeg pavucontrol \
+        inputplumber lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid \
+        # --- Shells & Prompts ---
+        bash zsh fish bash-completion zsh-completions \
+        starship zoxide eza iotop-c smartmontools \
+        # --- Development Base & CLI Tools ---
+        base-devel meld procps-ng curl file git github-cli ripgrep fd fzf jq man-db man-pages \
+        byobu openssh openssl wget paru \
+        nano micro vi unrar unzip xz nfs-utils btop konsave \
+        # --- Languages & IDEs ---
+        nodejs npm rust python-pip python-pipx \
+        cargo-binstall cargo-update visual-studio-code-bin \
+        # --- Networking & VPNs ---
+        networkmanager networkmanager-openvpn wpa_supplicant iwd ethtool dnsutils \
+        modemmanager usb_modeswitch nss-mdns bluez bluez-utils bluez-libs \
+        openvpn wireguard-tools pptpclient helium-browser-bin \
+        mullvad-vpn mullvad-vpn-daemon cloudflare-warp-bin tailscale \
+        # --- Containers & Virtualization ---
+        podman podman-compose docker docker-compose distrobox flatpak fwupd \
+        # --- Sched-ext & Performance ---
+        scx-scheds-git scx-tools-git scx-manager \
+        ananicy-cpp cachyos-ananicy-rules gamescope-session-cachyos
 
-# Install AUR packages
-# RUN --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-#     /usr/libexec/2-install-aur.sh
+# ==========================================
+# POST-INSTALL CONFIGURATION
+# ==========================================
 
-# Instead of running a script, we copy the pre-built packages from the builder stage
-# 1. Copy the built packages
+# Master copy of all custom OS files. 
+# Placed here so our custom configs and scripts (like steamos-update) 
+# overwrite the defaults installed by pacman.
+COPY files/usr/bin /usr/bin
+COPY files/usr/libexec /usr/libexec
+RUN chmod -R 0755 /usr/bin /usr/libexec /usr/share/libalpm/scripts
+
+# Install AUR packages from Stage 1
 COPY --from=aur_builder /home/builduser/packages/ /tmp/aur-pkgs/
-
-# 2. Install the scopebuddy .zst package
 RUN --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -U --noconfirm /tmp/aur-pkgs/scopebuddy-git*.pkg.tar.zst
+    pacman -U --noconfirm /tmp/aur-pkgs/scopebuddy-git*.pkg.tar.zst && \
+    rm -rf /tmp/aur-pkgs
 
-# Install and configure Waydroid for Android app support
-RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Sy --noconfirm --needed waydroid
-
-# Configure Flatpak by adding the Flathub remote
+# Configure Flatpak
 RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
 # Configure shell environment
 RUN /usr/libexec/3-shell-config.sh
 
-# Correctly generate the initramfs for the newly installed kernel
-#RUN /usr/local/bin/4-dracut-fix.sh
-COPY files/usr/bin /usr/bin
-
-# Ensure system users are created (fixes polkit user issues)
 RUN systemd-sysusers
 
-# Force creation of critical system users if sysusers failed and fix NetworkManager DNS
-# RUN getent group polkitd >/dev/null || groupadd -g 102 polkitd && \
-#     getent passwd polkitd >/dev/null || useradd -u 102 -g polkitd -d / -s /usr/bin/nologin polkitd && \
-#     getent group dbus >/dev/null || groupadd -g 81 dbus && \
-#     getent passwd dbus >/dev/null || useradd -u 81 -g dbus -d / -s /usr/bin/nologin dbus && \
-#     getent group systemd-resolve >/dev/null || groupadd -r systemd-resolve && \
-#     getent passwd systemd-resolve >/dev/null || useradd -r -g systemd-resolve -d / -s /usr/bin/nologin systemd-resolve && \
-#     mkdir -p /etc/NetworkManager/conf.d && \
-#     printf '[main]\ndns=systemd-resolved\n' > /etc/NetworkManager/conf.d/dns.conf
-
-# Fix permissions for polkit helper
-# RUN chmod 4755 /usr/lib/polkit-1/polkit-agent-helper-1 && \
-#     chmod 4755 /usr/bin/newuidmap && \
-#     chmod 4755 /usr/bin/newgidmap && \
-#     chmod 4755 /usr/bin/pkexec && \
-#     chmod 0750 /etc/polkit-1/rules.d && \
-#     chown root:polkitd /etc/polkit-1/rules.d
-
-# Disable SELinux labeling in Podman to prevent mount errors on non-SELinux kernels
+# Disable SELinux labeling in Podman
 RUN mkdir -p /etc/containers/containers.conf.d && \
     printf '[containers]\nlabel = false\n' > /etc/containers/containers.conf.d/01-no-selinux.conf
 
 # Enable required systemd services
-# Sunshine is NOT enabled by default for security. User must configure and enable it manually.
 RUN systemctl enable NetworkManager.service && \
     systemctl enable systemd-resolved.service && \
     systemctl enable dbus-broker.service && \
@@ -296,36 +197,24 @@ RUN systemctl enable NetworkManager.service && \
     systemctl enable brew-setup.service &&\
     systemctl enable docker.service && \
     systemctl enable sddm.service && \
+    systemctl enable usr-share-sddm-themes.mount && \
+    systemctl enable var-opt.mount && \
     systemctl --global enable install-flatpaks.service
 
-# Ensure /etc/resolv.conf links to systemd-resolved
-# RUN mkdir -p /usr/lib/tmpfiles.d && \
-#     echo "L+ /etc/resolv.conf - - - - /run/systemd/resolve/stub-resolv.conf" > /usr/lib/tmpfiles.d/boppos-resolv.conf
-
-# https://github.com/bootc-dev/bootc/issues/1801
+# Bootc / Dracut Fixes
 RUN --mount=type=tmpfs,dst=/run \
     printf "systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n" | tee /usr/lib/dracut/dracut.conf.d/30-bootcrew-fix-bootc-module.conf && \
     printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" ostree bootc "' | tee "/usr/lib/dracut/dracut.conf.d/30-bootcrew-bootc-container-build.conf" && \
     dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v -E '\.img$' | tail -n 1)/initramfs.img"
 
-# Preserve /opt contents by moving to /usr/lib/opt and creating tmpfiles to link them back
+# Preserve /opt contents by moving them to /usr/lib/opt
+# They will be exposed back to the user via the var-opt.mount OverlayFS
 RUN mkdir -p /usr/lib/opt && \
     if [ -d /opt ] && [ "$(ls -A /opt)" ]; then \
-        cp -a /opt/. /usr/lib/opt/ && \
-        mkdir -p /usr/lib/tmpfiles.d && \
-        for path in /opt/*; do \
-            echo "L+ /var/opt/$(basename "$path") - - - - /usr/lib/opt/$(basename "$path")" >> /usr/lib/tmpfiles.d/boppos-opt.conf; \
-        done \
+        mv /opt/* /usr/lib/opt/ || true; \
     fi
 
-# Make SDDM themes mutable by redirecting to /var/sddm_themes
-RUN mkdir -p /usr/lib/tmpfiles.d && \
-    mv /usr/share/sddm/themes /usr/share/sddm/themes.ro && \
-    ln -s /var/sddm_themes /usr/share/sddm/themes && \
-    printf "d /var/sddm_themes 0755 root root -\n" > /usr/lib/tmpfiles.d/boppos-sddm-themes.conf && \
-    printf "C /var/sddm_themes - - - - /usr/share/sddm/themes.ro\n" >> /usr/lib/tmpfiles.d/boppos-sddm-themes.conf
-
-# Final system setup and cleanup, adopted from upstream
+# Final system setup and cleanup
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     rm -rf /mnt /opt /boot /home /root /usr/local /srv /var /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
     mkdir -p /sysroot /boot /usr/lib/ostree /var /run /tmp && \
@@ -334,7 +223,6 @@ RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     printf "d /var/roothome 0700 root root -\nd /run/media 0755 root root -" | tee -a "/usr/lib/tmpfiles.d/bootc-base-dirs.conf" && \
     printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' | tee "/usr/lib/ostree/prepare-root.conf"
 
-    # Link /etc/os-release to its equivalent in /usr/lib/os-release
 RUN ln -sf ../usr/lib/os-release /etc/os-release
 RUN ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 
@@ -342,8 +230,5 @@ RUN ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 RUN mkdir -p /etc/pki/containers
 COPY cosign.pub /etc/pki/containers/boppos.pub
 
-# remove leftover file created by cachyos' vapor theme package
 RUN rm -f /README.md
-
-# Set bootc label for compatibility
 LABEL containers.bootc=1

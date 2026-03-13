@@ -1,32 +1,84 @@
 #!/bin/bash
 set -euo pipefail
 
-# This script configures the global shell environment for all users.
+echo "Configuring global environments for Bash, Zsh, and Fish..."
 
-BASHRC_FILE="/etc/bash.bashrc"
+# -----------------------------------------------------------------------------
+# 1. Global Environment Variables (Applies to Desktop Environment & GUI apps)
+# -----------------------------------------------------------------------------
+mkdir -p /etc/profile.d
+cat > /etc/profile.d/boppos-wayland.sh <<'EOF'
+# Forces Electron apps (Discord, VS Code, Obsidian) to run natively on Wayland.
+export ELECTRON_OZONE_PLATFORM_HINT="auto"
+EOF
+chmod +x /etc/profile.d/boppos-wayland.sh
 
-echo "Adding starship, zoxide, and eza alias to $BASHRC_FILE"
-
-# Add configurations to the end of the file
-cat >> "$BASHRC_FILE" <<'EOF'
-
+# -----------------------------------------------------------------------------
+# 2. BASH Configuration
+# -----------------------------------------------------------------------------
+cat >> /etc/bash.bashrc <<'EOF'
 # Added by BoppOS build process
 
-# -----------------------------------------------------------------------------
-# Starship - The cross-shell prompt
-# -----------------------------------------------------------------------------
+if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [ -x "/var/home/linuxbrew/.linuxbrew/bin/brew" ]; then
+    eval "$(/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
 eval "$(starship init bash)"
-
-# -----------------------------------------------------------------------------
-# zoxide - A smarter cd command
-# -----------------------------------------------------------------------------
 eval "$(zoxide init bash)"
-
-# -----------------------------------------------------------------------------
-# eza - A modern replacement for 'ls'
-# -----------------------------------------------------------------------------
 alias ls='eza --icons'
+EOF
 
+# -----------------------------------------------------------------------------
+# 3. ZSH Configuration
+# -----------------------------------------------------------------------------
+mkdir -p /etc/zsh
+cat >> /etc/zsh/zshrc <<'EOF'
+# Added by BoppOS build process
+
+if [ -x "/home/linuxbrew/.linuxbrew/bin/brew" ]; then
+    eval "$(/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+elif [ -x "/var/home/linuxbrew/.linuxbrew/bin/brew" ]; then
+    eval "$(/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)"
+fi
+
+eval "$(starship init zsh)"
+eval "$(zoxide init zsh)"
+alias ls='eza --icons'
+EOF
+
+# -----------------------------------------------------------------------------
+# 4. FISH Configuration
+# -----------------------------------------------------------------------------
+# Fish uses a conf.d directory for drop-in snippets, which is much cleaner.
+mkdir -p /etc/fish/conf.d
+cat > /etc/fish/conf.d/boppos.fish <<'EOF'
+# Added by BoppOS build process
+
+# Homebrew setup for fish syntax
+if test -x /home/linuxbrew/.linuxbrew/bin/brew
+    eval (/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+else if test -x /var/home/linuxbrew/.linuxbrew/bin/brew
+    eval (/var/home/linuxbrew/.linuxbrew/bin/brew shellenv)
+end
+
+# Fish does not natively read /etc/profile.d/ on some setups, 
+# so we export the Wayland hint here just to be safe for terminal launches.
+set -gx ELECTRON_OZONE_PLATFORM_HINT "auto"
+
+# We check if the binaries exist first so fish doesn't throw red errors
+if command -v starship >/dev/null
+    starship init fish | source
+end
+
+if command -v zoxide >/dev/null
+    zoxide init fish | source
+end
+
+if command -v eza >/dev/null
+    alias ls='eza --icons'
+end
 EOF
 
 echo "Shell configuration complete."

@@ -10,11 +10,11 @@ fi
 
 echo "Setting CPU architecture to $CPU_ARCH"
 
-REPO_FILE=$(mktemp)
-
-case "$CPU_ARCH" in
-    "znver4")
-        cat > "$REPO_FILE" <<EOF
+if [ "$CPU_ARCH" = "znver4" ]; then
+    # The base image is cachyos-v4, so [cachyos-v4] already exists.
+    # We must inject znver4 ABOVE v4 so it takes priority, while keeping v4 as a fallback.
+    REPO_FILE=$(mktemp)
+    cat > "$REPO_FILE" <<EOF
 [cachyos-znver4]
 Include = /etc/pacman.d/cachyos-v4-mirrorlist
 
@@ -25,38 +25,21 @@ Include = /etc/pacman.d/cachyos-v4-mirrorlist
 Include = /etc/pacman.d/cachyos-v4-mirrorlist
 
 EOF
-        ;;
-    "v4")
-        cat > "$REPO_FILE" <<EOF
 
-[cachyos-v4]
-Include = /etc/pacman.d/cachyos-v4-mirrorlist
+    # Insert znver4 right before the first [cachyos-v4] entry
+    awk -v repo_file="$REPO_FILE" '/^#?\[cachyos-v4\]/ && !done { system("cat " repo_file); done=1 } { print }' /etc/pacman.conf > /etc/pacman.conf.tmp && mv /etc/pacman.conf.tmp /etc/pacman.conf
+    rm -f "$REPO_FILE"
 
-[cachyos-core-v4]
-Include = /etc/pacman.d/cachyos-v4-mirrorlist
+    # Synchronize and force reinstall to pull the znver4 binaries over the v4 ones
+    echo "Synchronizing package databases..."
+    pacman -Syy
+    
+    echo "Reinstalling packages to apply znver4 optimizations..."
+    pacman -Qqn | pacman -S --noconfirm -
 
-[cachyos-extra-v4]
-Include = /etc/pacman.d/cachyos-v4-mirrorlist
-EOF
-        ;;
-    *) # Default to v3
-        # v3 is the default configuration, no extra repos needed.
-        ;;
-esac
-
-# Insert the repo config before the [cachyos] section so it takes precedence
-awk -v repo_file="$REPO_FILE" '/^#?\[cachyos\]/ && !done { system("cat " repo_file); done=1 } { print }' /etc/pacman.conf > /etc/pacman.conf.tmp && mv /etc/pacman.conf.tmp /etc/pacman.conf
-
-rm -f "$REPO_FILE"
-
-cat /etc/pacman.conf
-
-# Synchronize databases
-echo "Synchronizing package databases..."
-pacman -Syy
-
-# Reinstall all base packages from the newly enabled repos to get optimized versions
-echo "Reinstalling all packages to apply CPU optimizations..."
-pacman -Qqn | pacman -S --noconfirm -
+else
+    # If v4 or v3, the docker base images already have the correct pacman.conf.
+    echo "Base image already configured for $CPU_ARCH. No repository injection needed."
+fi
 
 echo "CPU optimization step complete."
