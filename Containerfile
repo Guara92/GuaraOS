@@ -99,7 +99,6 @@ RUN --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysim
     rm -f /usr/lib/sysimage/cache/pacman/pkg/lua* && \
     rm -f /usr/lib/sysimage/cache/pacman/pkg/*.part && \
     pacman -Sc --noconfirm && \
-    \
     if [ "$TARGET_CPU_MARCH" = "znver4" ]; then \
         echo "Injecting znver4 repositories for Zen 4/5 optimization..." && \
         printf "[cachyos-znver4]\nInclude = /etc/pacman.d/cachyos-v4-mirrorlist\n\n[cachyos-core-znver4]\nInclude = /etc/pacman.d/cachyos-v4-mirrorlist\n\n[cachyos-extra-znver4]\nInclude = /etc/pacman.d/cachyos-v4-mirrorlist\n\n" > /tmp/znver4-repos.conf && \
@@ -130,7 +129,7 @@ RUN --mount=type=tmpfs,dst=/run \
     pacman -Sy --noconfirm --needed \
         # --- System Core ---
         linux-cachyos linux-cachyos-headers systemd systemd-sysvcompat \
-        dbus dbus-broker-units dbus-glib glib2 polkit shadow \
+        dbus dbus-broker-units dbus-glib glib2 polkit shadow lua-luv \
         dracut ostree bootc skopeo amd-ucode intel-ucode linux-firmware sof-firmware \
         # --- Graphics & Drivers ---
         mesa lib32-mesa mesa-utils vulkan-icd-loader vulkan-radeon lib32-vulkan-radeon vulkan-tools \
@@ -157,7 +156,7 @@ RUN --mount=type=tmpfs,dst=/run \
         mangohud goverlay pipewire-pulse libdvdcss gst-libav mpv-git ffmpeg pavucontrol \
         inputplumber lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid \
         # --- Shells & Prompts ---
-        bash zsh fish bash-completion zsh-completions \
+        bash zsh fish bash-preexec bash-completion zsh-completions \
         starship zoxide eza iotop-c smartmontools \
         # --- Development Base & CLI Tools ---
         base-devel meld procps-ng curl file git github-cli ripgrep fd fzf jq man-db man-pages \
@@ -195,8 +194,20 @@ RUN --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysim
 # Configure Flatpak
 RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 
-# Fix sudo/pkexec permissions without nuking the whole bin folder
-RUN chmod 4755 /usr/bin/sudo /usr/bin/pkexec
+# Fix suid permissions
+RUN chmod 4755 \
+    /usr/bin/sudo \
+    /usr/bin/pkexec \
+    /usr/bin/su \
+    /usr/bin/unix_chkpwd \
+    /usr/lib/polkit-1/polkit-agent-helper-1 \
+    /usr/bin/passwd \
+    /usr/bin/chsh \
+    /usr/bin/chfn \
+    /usr/bin/newgrp \
+    /usr/bin/mount \
+    /usr/bin/umount \
+    /usr/bin/fusermount3
 
 # Configure shell environment
 RUN /usr/libexec/3-shell-config.sh
