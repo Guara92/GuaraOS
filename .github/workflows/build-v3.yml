@@ -7,6 +7,12 @@ on:
   schedule:
     - cron: "30 06 * * SUN" # 06:30am UTC on sunday
   workflow_dispatch:
+    inputs:
+      no_cache:
+        description: 'Force a clean build (--no-cache)'
+        required: false
+        type: boolean
+        default: false
 
 env:
   IMAGE_DESC: "CachyOS BoppOS Bootc image"
@@ -119,6 +125,12 @@ jobs:
               BUILD_ARGS+=("--label" "$label")
             fi
           done <<< "$META_LABELS"
+
+          # Check if the manual 'no_cache' toggle was checked in the GitHub UI
+          if [ "${{ github.event.inputs.no_cache }}" == "true" ]; then
+            echo "Manual cache bust triggered. Appending --no-cache..."
+            BUILD_ARGS+=("--no-cache")
+          fi
 
           sudo podman build "${BUILD_ARGS[@]}" \
             --build-arg TARGET_CPU_MARCH="$MARCH" \
