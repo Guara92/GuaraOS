@@ -39,6 +39,13 @@ RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/c
     cd /tmp/autofs && \
     sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
 
+# Build pacman-ostree
+RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/cache/pacman/pkg \
+    git clone https://aur.archlinux.org/pacman-ostree.git /tmp/pacman-ostree && \
+    chown -R builduser:builduser /tmp/pacman-ostree && \
+    cd /tmp/pacman-ostree && \
+    sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
+
 # ==========================================
 # STAGE 2: System Build
 # ==========================================
