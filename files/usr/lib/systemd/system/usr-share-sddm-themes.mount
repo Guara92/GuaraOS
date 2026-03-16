@@ -8,7 +8,7 @@ What=overlay
 Where=/usr/share/sddm/themes
 Type=overlay
 # Adjusted to match the Bazzite directory names
-Options=lowerdir=/usr/share/sddm/themes,upperdir=/var/sddm_themes/themes,workdir=/var/sddm_themes/themes.work
+Options=lowerdir=/usr/share/sddm/themes,upperdir=/var/sddm_themes/themes,workdir=/var/sddm_themes/themes.work,index=off,metacopy=off
 
 [Install]
 WantedBy=multi-user.target

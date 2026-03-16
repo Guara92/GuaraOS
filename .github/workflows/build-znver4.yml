@@ -140,10 +140,18 @@ jobs:
           set -xeuo pipefail
 
           IMAGE_REF="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
+          ARCHIVE_PATH="${{ github.workspace }}/rechunked_image.tar"
 
+          # Write the chunkah stream to disk to prevent pipe deadlocks and RAM exhaustion
           sudo podman run --rm --network=none --cgroups=disabled --mount=type=image,source=$IMAGE_REF,target=/chunkah \
             -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
-            quay.io/jlebon/chunkah build --label containers.bootc=1 --max-layers 256 | sudo podman load > /tmp/podman_load_output.txt
+            quay.io/jlebon/chunkah build --label containers.bootc=1 --max-layers 256 > "$ARCHIVE_PATH"
+
+          # Load the completed archive back into podman
+          sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt
+          
+          # Clean up immediately to save disk space
+          sudo rm -f "$ARCHIVE_PATH"
 
           IMAGE_ID=$(cat /tmp/podman_load_output.txt | grep "Loaded image" | awk '{print $3}')
           sudo podman tag "$IMAGE_ID" "$IMAGE_REF"
