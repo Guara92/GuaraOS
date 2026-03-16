@@ -177,7 +177,7 @@ RUN --mount=type=tmpfs,dst=/run \
         # --- Audio Core ---
         pipewire-pulse pipewire-alsa pipewire-jack wireplumber pavucontrol alsa-utils alsa-plugins \
         # --- Gaming Core & Utilities ---
-        xdotool yad winboat proton-cachyos wine gamescope-session-git \
+        xorg-xwininfo xdotool yad winboat proton-cachyos wine gamescope-session-git \
         sunshine lact coolercontrol openrgb openrgb-plugin-effects-git nvtop \
         libdvdcss gst-libav mpv-git ffmpeg \
         inputplumber lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid \
