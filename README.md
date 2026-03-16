@@ -8,6 +8,12 @@ This is all very experimental. So use at your own risk.
 
 ---
 
+## What's Changed (vs. Upstream)
+
+- **Desktop First:** Stripped away Steam Deck/handheld-specific UI elements and scaling tweaks in favor of a standard KDE Plasma desktop.
+- **Developer Ready:** Pre-installed essentials like Docker, VS Code, Node.js, Rust, and Python.
+- **Streamlined Management:** Integrated `just` for simplified building and introduced a custom `boppos-update` script for seamless OS updates.
+
 ## Key Features
 
 - **High-Performance Base**: Built on [CachyOS](https://cachyos.org/), an Arch-based distribution with performance-tuned kernels and repositories.
@@ -26,30 +32,30 @@ This is all very experimental. So use at your own risk.
 
 ## Build Instructions
 
-You can build the CachyOS BoppOS image using any container tool like `podman` or `docker`.
+CachyOS BoppOS uses `just` as a command runner to simplify the build process. Ensure you have `just` and `podman` installed.
 
-### Standard Build (v3 Generic)
+### x86-64-v3 Build (v3 Default)
 
 This build is compatible with most modern x86-64 hardware and is suitable for sharing or for use in CI/CD environments.
 
 ```bash
-podman build -t cachyos-boppos-bootc:latest .
+just build
 ```
 
-### v4 Build (x86-64-v4)
+### x86-64-v4 Build (v4)
 
 This enables optimizations for a wide range of modern CPUs (e.g., Intel Haswell and newer, AMD Excavator and newer) that support the x86-64-v4 microarchitecture level.
 
 ```bash
-podman build --build-arg TARGET_CPU_MARCH=v4 -t cachyos-boppos-bootc:v4 .
+just build v4
 ```
 
-### Optimized Build (znver4)
+### Zen4/Zen5 Build (znver4)
 
 If you are building on and for a system with an AMD Ryzen 7000 series CPU (or newer), you can enable native `znver4` optimizations for maximum performance.
 
 ```bash
-podman build --build-arg TARGET_CPU_MARCH=znver4 -t cachyos-boppos-bootc:znver4 .
+just build znver4
 ```
 
 ## Installation & Switching
@@ -86,6 +92,21 @@ Your system will download the new image and stage it for the next boot.
 
 **Note on Signature Verification**: For a secure transition, you may need to configure your system to trust the signature of the new image. The `Containerfile` includes a `cosign.pub` key and `policy.json`, which you may need to adapt for your registry and signing setup.
 
+### Switching to a Local Build
+
+If you are building the image locally and want to apply it to your current system without pushing to a registry first, you can use the `just switch` command. This transfers the locally built container from your user environment to the root environment and tells `bootc` to switch to it via local storage.
+
+```bash
+# 1. Build the image
+just build
+
+# 2. Switch to the local v3 build
+just switch
+
+# (Optional) Switch to a specific architecture tag instead:
+just switch v4
+just switch znver4
+```
 
 ## Acknowledgements
 
