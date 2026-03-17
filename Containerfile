@@ -66,6 +66,7 @@ RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/c
 FROM docker.io/cachyos/cachyos-${BASE_IMAGE_TAG} AS system
 ARG TARGET_CPU_MARCH
 ARG BASE_IMAGE_TAG
+ENV GPG_TTY=/dev/null
 ENV LANG=en_US.UTF-8
 
 # Copy Homebrew
@@ -75,6 +76,19 @@ RUN setfattr -n user.component -v "homebrew" "/usr/share/homebrew.tar.zst"
 # Copy configured pacman environment from aur_builder
 COPY --from=aur_builder /etc/pacman.conf /etc/pacman.conf
 COPY --from=aur_builder /etc/pacman.d /etc/pacman.d
+
+# Re-initialize and trust keys in the system stage to avoid GPGME environment issues
+RUN pacman-key --init && \
+    pacman-key --populate archlinux cachyos && \
+    pacman -Sy --noconfirm --needed curl && \
+    for key in F3B607488DB35A47 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB 3056513887B78AEB; do \
+        curl -sSfL --retry 3 "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x$key" -o /tmp/key.asc || \
+        curl -sSfL --retry 3 "https://keys.openpgp.org/pks/lookup?op=get&options=mr&search=0x$key" -o /tmp/key.asc || { echo "Failed to download key $key"; exit 1; }; \
+        pacman-key --add /tmp/key.asc && rm -f /tmp/key.asc || { echo "Failed to add key $key to pacman-key"; exit 1; }; \
+    done && \
+    pacman-key --lsign-key F3B607488DB35A47 && \
+    pacman-key --lsign-key 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB && \
+    pacman-key --lsign-key 3056513887B78AEB
 
 # Ensure the log file exists
 RUN touch /var/log/pacman.log
