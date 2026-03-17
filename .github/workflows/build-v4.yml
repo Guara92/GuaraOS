@@ -47,17 +47,6 @@ jobs:
             echo "should_skip=true" >> $GITHUB_OUTPUT # Set an output variable
           fi
 
-      - name: Cleanup Runner Environment
-        if: steps.check_compatibility.outputs.should_skip != 'true'
-        run: |
-          echo "Cleaning up any zombie podman/buildah processes from previous cancelled runs..."
-          sudo pkill -9 -f podman || true
-          sudo pkill -9 -f buildah || true
-          sudo pkill -9 -f chunkah || true
-          # Remove potential stale locks just in case the process was killed ungracefully
-          sudo rm -f /var/lib/containers/storage/libpod/bolt_state.db.lock || true
-          echo "Cleanup complete."
-
       - name: Checkout
         if: steps.check_compatibility.outputs.should_skip != 'true'
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -100,13 +89,6 @@ jobs:
           sep-tags: " "
           sep-annotations: " "
 
-      - name: Strip Local Mounts for CI
-        if: steps.check_compatibility.outputs.should_skip != 'true'
-        run: |
-          # Use a regex to universally strip all --mount flags (tmpfs, cache, bind) 
-          # from the Containerfile so it runs safely under --isolation=chroot
-          sed -i 's/--mount=[^ ]* //g' Containerfile
-
       - name: Build Image
         id: build_image
         env:
@@ -138,9 +120,6 @@ jobs:
           fi
 
           sudo podman build "${BUILD_ARGS[@]}" \
-            --ipc=host \
-            --isolation=chroot \
-            --security-opt seccomp=unconfined \
             --build-arg TARGET_CPU_MARCH="$MARCH" \
             --build-arg BASE_IMAGE_TAG="$BASE_TAG" \
             --tag "$IMAGE_NAME:$DEFAULT_TAG" .
@@ -153,26 +132,10 @@ jobs:
           IMAGE_REF="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
           ARCHIVE_PATH="${{ github.workspace }}/rechunked_image.tar"
 
-          # Start a background process to monitor the archive size every 30 seconds
-          (
-            while true; do
-              if [ -f "$ARCHIVE_PATH" ]; then
-                echo "Progress: rechunked_image.tar is currently $(sudo du -h "$ARCHIVE_PATH" | cut -f1)"
-              else
-                echo "Progress: Waiting for chunkah to begin writing..."
-              fi
-              sleep 30
-            done
-          ) &
-          MONITOR_PID=$!
-
           # Write the chunkah stream to disk to prevent pipe deadlocks and RAM exhaustion
           sudo podman run --rm --network=none --mount=type=image,source=$IMAGE_REF,target=/chunkah \
             -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
             quay.io/jlebon/chunkah build --label containers.bootc=1 --max-layers 256 > "$ARCHIVE_PATH"
-
-          # Stop the monitor once chunkah finishes
-          kill $MONITOR_PID || true
 
           # Load the completed archive back into podman
           sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt

@@ -52,16 +52,6 @@ jobs:
             echo "should_skip=true" >> $GITHUB_OUTPUT # Set an output variable
           fi
 
-      - name: Cleanup Runner Environment
-        if: steps.check_compatibility.outputs.should_skip != 'true'
-        run: |
-          echo "Cleaning up any zombie podman/buildah processes from previous cancelled runs..."
-          sudo pkill -9 -f podman || true
-          sudo pkill -9 -f buildah || true
-          sudo pkill -9 -f chunkah || true
-          sudo rm -f /var/lib/containers/storage/libpod/bolt_state.db.lock || true
-          echo "Cleanup complete."
-
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
@@ -106,15 +96,9 @@ jobs:
           sep-tags: " "
           sep-annotations: " "
 
-      - name: Strip Local Mounts for CI
-        if: steps.check_compatibility.outputs.should_skip != 'true'
-        run: |
-          # Use a regex to universally strip all --mount flags (tmpfs, cache, bind) 
-          # from the Containerfile so it runs safely under --isolation=chroot
-          sed -i 's/--mount=[^ ]* //g' Containerfile
-
       - name: Build Image
         id: build_image
+        if: steps.check_compatibility.outputs.should_skip != 'true'
         env:
           META_LABELS: ${{ steps.metadata.outputs.labels }}
         run: |
@@ -148,32 +132,17 @@ jobs:
             --tag "$IMAGE_NAME:$DEFAULT_TAG" .
 
       - name: Rechunk Image
+        if: steps.check_compatibility.outputs.should_skip != 'true'
         run: |
           set -xeuo pipefail
 
           IMAGE_REF="localhost/${IMAGE_NAME}:${DEFAULT_TAG}"
           ARCHIVE_PATH="${{ github.workspace }}/rechunked_image.tar"
 
-          # Start a background process to monitor the archive size every 30 seconds
-          (
-            while true; do
-              if [ -f "$ARCHIVE_PATH" ]; then
-                echo "Progress: rechunked_image.tar is currently $(sudo du -h "$ARCHIVE_PATH" | cut -f1)"
-              else
-                echo "Progress: Waiting for chunkah to begin writing..."
-              fi
-              sleep 30
-            done
-          ) &
-          MONITOR_PID=$!
-
           # Write the chunkah stream to disk to prevent pipe deadlocks and RAM exhaustion
           sudo podman run --rm --network=none --mount=type=image,source=$IMAGE_REF,target=/chunkah \
             -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
             quay.io/jlebon/chunkah build --label containers.bootc=1 --max-layers 256 > "$ARCHIVE_PATH"
-
-          # Stop the monitor once chunkah finishes
-          kill $MONITOR_PID || true
 
           # Load the completed archive back into podman
           sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt
@@ -185,7 +154,7 @@ jobs:
           sudo podman tag "$IMAGE_ID" "$IMAGE_REF"
 
       - name: Login to GitHub Container Registry
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: steps.check_compatibility.outputs.should_skip != 'true' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LOGIN_USER: ${{ github.actor }}
@@ -194,7 +163,7 @@ jobs:
           echo "${GITHUB_TOKEN}" | docker login -u "${LOGIN_USER}" --password-stdin "ghcr.io" # For cosign
 
       - name: Push to GHCR
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: steps.check_compatibility.outputs.should_skip != 'true' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         id: push
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
@@ -214,10 +183,10 @@ jobs:
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: steps.check_compatibility.outputs.should_skip != 'true' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
 
       - name: Sign container image
-        if: github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+        if: steps.check_compatibility.outputs.should_skip != 'true' && github.event_name != 'pull_request' && github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
         run: cosign sign -y --new-bundle-format=false --use-signing-config=false --key env://COSIGN_PRIVATE_KEY "${IMAGE_REGISTRY}/${IMAGE_NAME}@${REMOTE_IMAGE_DIGEST}"
         env:
           REMOTE_IMAGE_DIGEST: ${{ steps.push.outputs.remote_image_digest }}
