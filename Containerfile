@@ -276,7 +276,9 @@ RUN mkdir -p /etc/containers/containers.conf.d && \
     printf '[containers]\nlabel = false\n' > /etc/containers/containers.conf.d/01-no-selinux.conf
 
 # Enable required systemd services
-RUN systemctl enable NetworkManager.service && \
+RUN systemctl enable var-opt.mount && \
+    systemctl enable usr-share-sddm.mount && \
+    systemctl enable NetworkManager.service && \
     systemctl enable systemd-resolved.service && \
     systemctl enable dbus-broker.service && \
     systemctl enable bluetooth.service && \
@@ -287,8 +289,6 @@ RUN systemctl enable NetworkManager.service && \
     systemctl enable brew-setup.service && \
     systemctl enable docker.service && \
     systemctl enable sddm.service && \
-    systemctl enable usr-share-sddm-themes.mount && \
-    systemctl enable var-opt.mount && \
     systemctl --global enable install-flatpaks.service
 
 # Bootc / Dracut Fixes
