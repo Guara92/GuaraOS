@@ -8,11 +8,20 @@
 # ==========================================
 ARG TARGET_CPU_MARCH=v3
 ARG BASE_IMAGE_TAG=v3
+ARG WIPE_PKG_CACHE=false
 
 FROM docker.io/cachyos/cachyos-${BASE_IMAGE_TAG} AS aur_builder
 ARG TARGET_CPU_MARCH
 ARG BASE_IMAGE_TAG
 USER root
+
+# Conditionally wipe the AUR builder package cache
+ARG WIPE_PKG_CACHE
+RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/cache/pacman/pkg \
+    if [ "$WIPE_PKG_CACHE" = "true" ]; then \
+        echo "Wiping AUR builder package cache..." && \
+        rm -rf /var/cache/pacman/pkg/* ; \
+    fi
 
 # Minimal setup: just enough to build packages
 # Dynamic cache ID ensures builder isolation for different architectures
@@ -68,6 +77,14 @@ ARG TARGET_CPU_MARCH
 ARG BASE_IMAGE_TAG
 ENV GPG_TTY=/dev/null
 ENV LANG=en_US.UTF-8
+
+# Conditionally wipe the system package cache
+ARG WIPE_PKG_CACHE
+RUN --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    if [ "$WIPE_PKG_CACHE" = "true" ]; then \
+        echo "Wiping system package cache..." && \
+        rm -rf /usr/lib/sysimage/cache/pacman/pkg/* ; \
+    fi
 
 # Copy Homebrew
 COPY --from=ghcr.io/ublue-os/brew:latest /system_files /

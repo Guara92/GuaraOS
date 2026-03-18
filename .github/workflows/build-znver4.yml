@@ -8,6 +8,11 @@ on:
         required: false
         type: boolean
         default: false
+      wipe_pkg_cache:
+        description: 'Wipe package cache before build'
+        required: false
+        type: boolean
+        default: false
 
 env:
   IMAGE_DESC: "CachyOS BoppOS Bootc image (znver4)"
@@ -117,6 +122,12 @@ jobs:
           if [ "${{ github.event.inputs.no_cache }}" == "true" ]; then
             echo "Manual cache bust triggered. Appending --no-cache..."
             BUILD_ARGS+=("--no-cache")
+          fi
+
+          # Check if the manual 'wipe_pkg_cache' toggle was checked in the GitHub UI
+          if [ "${{ github.event.inputs.wipe_pkg_cache }}" == "true" ]; then
+            echo "Manual wipe package cache triggered. Appending build arg..."
+            BUILD_ARGS+=("--build-arg" "WIPE_PKG_CACHE=true")
           fi
 
           sudo podman build "${BUILD_ARGS[@]}" \
