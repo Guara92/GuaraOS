@@ -28,12 +28,7 @@ RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/c
 RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/cache/pacman/pkg \
     pacman-key --init && \
     pacman-key --populate archlinux cachyos && \
-    pacman -Sy --noconfirm --needed curl && \
-    for key in F3B607488DB35A47 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB 3056513887B78AEB; do \
-        curl -sSfL --retry 3 "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x$key" -o /tmp/key.asc || \
-        curl -sSfL --retry 3 "https://keys.openpgp.org/pks/lookup?op=get&options=mr&search=0x$key" -o /tmp/key.asc || { echo "Failed to download key $key"; exit 1; }; \
-        pacman-key --add /tmp/key.asc && rm -f /tmp/key.asc || { echo "Failed to add key $key to pacman-key"; exit 1; }; \
-    done && \
+    pacman-key --recv-keys F3B607488DB35A47 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB 3056513887B78AEB && \
     pacman-key --lsign-key F3B607488DB35A47 && \
     pacman-key --lsign-key 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB && \
     pacman-key --lsign-key 3056513887B78AEB && \
@@ -98,16 +93,11 @@ COPY --from=aur_builder /etc/pacman.d /etc/pacman.d
 RUN rm -rf /etc/pacman.d/gnupg && \
     pacman-key --init && \
     pacman-key --populate archlinux cachyos && \
-    pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' && \
-    pacman -Sy --noconfirm --needed curl && \
-    for key in F3B607488DB35A47 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB 3056513887B78AEB; do \
-        curl -sSfL --retry 3 "https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0x$key" -o /tmp/key.asc || \
-        curl -sSfL --retry 3 "https://keys.openpgp.org/pks/lookup?op=get&options=mr&search=0x$key" -o /tmp/key.asc || { echo "Failed to download key $key"; exit 1; }; \
-        pacman-key --add /tmp/key.asc && rm -f /tmp/key.asc || { echo "Failed to add key $key to pacman-key"; exit 1; }; \
-    done && \
+    pacman-key --recv-keys F3B607488DB35A47 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB 3056513887B78AEB && \
     pacman-key --lsign-key F3B607488DB35A47 && \
     pacman-key --lsign-key 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB && \
-    pacman-key --lsign-key 3056513887B78AEB
+    pacman-key --lsign-key 3056513887B78AEB && \
+    pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
 
 # Ensure the log file exists
 RUN touch /var/log/pacman.log
