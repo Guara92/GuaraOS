@@ -179,10 +179,10 @@ RUN --mount=type=tmpfs,dst=/run \
         xdg-desktop-portal xdg-desktop-portal-kde xdg-desktop-portal-gtk kde-gtk-config colord-kde \
         # --- Desktop Integration & Services ---
         plasma-pa plasma-nm kwallet-pam udisks2 python-gobject \
-        kio-extras kio-fuse kio-admin flatpak-kcm xdg-utils \
+        kio-extras kio-fuse kio-admin flatpak-kcm xdg-utils libappimage \
         gtk3 gtk4 nss libnotify libxss libappindicator-gtk3 libsecret \
         # --- Desktop Applications & Utilities ---
-        dolphin konsole ptyxis kate ark spectacle kdeconnect \
+        dolphin dolphin-plugins konsole ptyxis kate ark spectacle kdeconnect \
         partitionmanager plasma-disks plasma-systemmonitor \
         # --- Media & Thumbnails ---
         ffmpegthumbnailer ffmpegthumbs kdegraphics-thumbnailers \
