@@ -105,8 +105,9 @@ RUN rm -rf /etc/pacman.d/gnupg && \
 RUN touch /var/log/pacman.log
 
 # Move pacman directories for bootc/usroverlay compatibility
+# FIXED: Removed the mesa-git IgnorePkg hack
 RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | xargs -n1 sh -c 'mkdir -p "/usr/lib/sysimage/$(dirname $(echo $1 | sed "s@/var/@@"))" && mv -v "$1" "/usr/lib/sysimage/$(echo "$1" | sed "s@/var/@@")"' '' && \
-    sed -i -e "/= *\/var/ s/^#//" -e "s@= */var@= /usr/lib/sysimage@g" -e "/DownloadUser/d" -e "/^#IgnorePkg/a IgnorePkg = mesa-git lib32-mesa-git" /etc/pacman.conf
+    sed -i -e "/= *\/var/ s/^#//" -e "s@= */var@= /usr/lib/sysimage@g" -e "/DownloadUser/d" /etc/pacman.conf
 
 # PRE-INSTALL CONFIGURATION & HOOKS
 # Copy hooks and configs EARLY so they fire during the master pacman block.
@@ -157,6 +158,7 @@ RUN --mount=type=tmpfs,dst=/run \
 # ==========================================
 RUN --mount=type=tmpfs,dst=/run \
     --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    pacman -Rdd --noconfirm pulseaudio pulseaudio-bluetooth mesa-git lib32-mesa-git || echo "Conflicting packages not found, skipping." && \
     pacman -Sy --noconfirm --needed \
         # --- System Core ---
         linux-cachyos linux-cachyos-headers systemd systemd-sysvcompat \
@@ -172,9 +174,9 @@ RUN --mount=type=tmpfs,dst=/run \
         cachyos-plymouth-theme cachyos-plymouth-bootanimation \
         cachyos-ananicy-rules cachyos-zsh-config cachyos-fish-config \
         # --- Graphics & Drivers ---
-        mesa lib32-mesa mesa-utils vulkan-icd-loader vulkan-mesa-layers lib32-vulkan-mesa-layers \
-        vulkan-radeon lib32-vulkan-radeon libva-mesa-driver lib32-libva-mesa-driver \
-        vulkan-intel lib32-vulkan-intel intel-media-driver vulkan-nouveau lib32-vulkan-nouveau \
+        mesa lib32-mesa mesa-utils vulkan-icd-loader vulkan-mesa-layers \
+        vulkan-intel vulkan-radeon intel-media-driver vulkan-nouveau \
+        lib32-vulkan-mesa-layers lib32-vulkan-intel lib32-vulkan-radeon lib32-vulkan-nouveau \
         # --- Desktop Environment (KDE Plasma) Core ---
         plasma-desktop plasma-workspace xorg-xwayland qt5-wayland qt6-wayland \
         breeze-gtk sddm-kcm powerdevil kscreen polkit-kde-agent \
