@@ -187,7 +187,7 @@ RUN --mount=type=tmpfs,dst=/run \
         gtk3 gtk4 nss libnotify libxss libappindicator-gtk3 libsecret \
         # --- Desktop Applications & Utilities ---
         dolphin dolphin-plugins konsole ptyxis kate ark spectacle kdeconnect \
-        partitionmanager plasma-disks plasma-systemmonitor \
+        partitionmanager plasma-disks plasma-systemmonitor gpu-screen-recorder-ui \
         # --- Media & Thumbnails ---
         ffmpegthumbnailer ffmpegthumbs kdegraphics-thumbnailers \
         kimageformats qt6-imageformats \
