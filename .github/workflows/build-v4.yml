@@ -1,5 +1,8 @@
 name: Build container image (v4)
 on:
+  schedule:
+    # 07:30am UTC every other day. Staggered after v3 build.
+    - cron: "30 07 */2 * *"
   workflow_dispatch:
     inputs:
       no_cache:

@@ -1,5 +1,8 @@
 name: Build container image (znver4)
 on:
+  schedule:
+    # 08:30am UTC every other day. Staggered after v3 and v4 builds.
+    - cron: "30 08 */2 * *"
   workflow_dispatch:
     inputs:
       no_cache:
