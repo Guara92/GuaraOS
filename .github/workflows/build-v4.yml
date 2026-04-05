@@ -169,14 +169,10 @@ jobs:
             if [ "$FLAVOR" == "base" ]; then
               DOCKERFILE="Containerfile.base"
               FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$BASE_TAG" "--build-arg" "TARGET_CPU_MARCH=$MARCH")
-            else
-              DOCKERFILE="Containerfile.${FLAVOR}"
-              FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$DEFAULT_TAG")
-            fi
 
-            sudo podman build "${BUILD_ARGS[@]}" "${FLAVOR_ARGS[@]}" \
-              --network=host \
-              --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
+              sudo podman build "${BUILD_ARGS[@]}" "${FLAVOR_ARGS[@]}" \
+                --network=host \
+                --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
 
               echo "Rechunking base image..."
               IMAGE_REF="localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
