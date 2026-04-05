@@ -108,8 +108,8 @@ jobs:
           echo "${GITHUB_TOKEN}" | sudo podman login -u "${LOGIN_USER}" --password-stdin "ghcr.io"
           echo "${GITHUB_TOKEN}" | docker login -u "${LOGIN_USER}" --password-stdin "ghcr.io" # For cosign
 
-      - name: Build & Rechunk Images
-        id: build_rechunk
+      - name: Build & Rechunk Base Image
+        id: build_rechunk_base
         if: steps.check_compatibility.outputs.should_skip != 'true'
         env:
           META_LABELS: ${{ steps.metadata.outputs.labels }}
@@ -144,54 +144,38 @@ jobs:
             BUILD_ARGS+=("--build-arg" "WIPE_PKG_CACHE=true")
           fi
 
-          FLAVORS=("base" "plasma" "gnome" "niri")
+          echo "::group::Building base"
+          CURRENT_IMAGE_NAME="cachyos-boppos-base"
+          DOCKERFILE="Containerfile.base"
+          FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$BASE_TAG" "--build-arg" "TARGET_CPU_MARCH=$MARCH")
+
+          sudo podman build "${BUILD_ARGS[@]}" "${FLAVOR_ARGS[@]}" \
+            --network=host \
+            --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
+
+          echo "Rechunking base image..."
+          IMAGE_REF="localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
+          ARCHIVE_PATH="${{ github.workspace }}/rechunked_base.tar"
+
+          sudo podman run --rm --network=none --mount=type=image,source=$IMAGE_REF,target=/chunkah \
+            -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
+            quay.io/coreos/chunkah build --compressed --compression-level 2 --label containers.bootc=1 --max-layers 256 --prune /var/cache/ --prune /var/log/ --prune /tmp/ --prune /var/tmp/ > "$ARCHIVE_PATH"
+
+          sudo podman rmi -f "$IMAGE_REF"
+          sudo podman system prune -f
+          sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt
+          sudo rm -f "$ARCHIVE_PATH"
+
+          IMAGE_ID=$(cat /tmp/podman_load_output.txt | grep "Loaded image" | awk '{print $3}')
+          sudo podman tag "$IMAGE_ID" "$IMAGE_REF"
           
-          for FLAVOR in "${FLAVORS[@]}"; do
-            echo "::group::Building $FLAVOR"
-            CURRENT_IMAGE_NAME="cachyos-boppos-${FLAVOR}-test"
-            
-            if [ "$FLAVOR" == "base" ]; then
-              DOCKERFILE="Containerfile.base"
-              FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$BASE_TAG" "--build-arg" "TARGET_CPU_MARCH=$MARCH")
+          # Ensure the local base image is tagged properly so the DE overlays can layer onto it!
+          sudo podman tag "$IMAGE_REF" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
+          echo "::endgroup::"
 
-              sudo podman build "${BUILD_ARGS[@]}" "${FLAVOR_ARGS[@]}" \
-                --network=host \
-                --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
-
-              echo "Rechunking base image..."
-              IMAGE_REF="localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
-              ARCHIVE_PATH="${{ github.workspace }}/rechunked_${FLAVOR}.tar"
-
-              sudo podman run --rm --network=none --mount=type=image,source=$IMAGE_REF,target=/chunkah \
-                -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
-                quay.io/coreos/chunkah build --compressed --compression-level 2 --label containers.bootc=1 --max-layers 256 --prune /var/cache/ --prune /var/log/ --prune /tmp/ --prune /var/tmp/ > "$ARCHIVE_PATH"
-
-              sudo podman rmi -f "$IMAGE_REF"
-              sudo podman system prune -f
-              sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt
-              sudo rm -f "$ARCHIVE_PATH"
-
-              IMAGE_ID=$(cat /tmp/podman_load_output.txt | grep "Loaded image" | awk '{print $3}')
-              sudo podman tag "$IMAGE_ID" "$IMAGE_REF"
-              
-              # Ensure the local base image is tagged properly so the DE overlays can layer onto it!
-              sudo podman tag "$IMAGE_REF" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
-            else
-              DOCKERFILE="Containerfile.${FLAVOR}"
-              FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$DEFAULT_TAG")
-
-              # For DE overlays, just build! They layer natively on the rechunked base.
-              sudo podman build "${BUILD_ARGS[@]}" "${FLAVOR_ARGS[@]}" \
-                --network=host \
-                --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
-            fi
-            
-            echo "::endgroup::"
-          done
-
-      - name: Push to GHCR
+      - name: Push Base Image to GHCR
         if: steps.check_compatibility.outputs.should_skip != 'true' && github.event_name != 'pull_request'
-        id: push
+        id: push_base
         env:
           IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
           IMAGE_TAGS: ${{ steps.metadata.outputs.tags }}
@@ -200,11 +184,91 @@ jobs:
         run: |
           set -ex
           
-          FLAVORS=("base" "plasma" "gnome" "niri")
+          echo "::group::Pushing base"
+          CURRENT_IMAGE_NAME="cachyos-boppos-base"
+          
+          for tag in $IMAGE_TAGS; do
+            SUCCESS=false
+            for i in $(seq "${MAX_RETRIES}"); do
+              if sudo podman push --compression-format=zstd --compression-level=2 "localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${tag}"; then
+                echo "Initial push completed. Performing a safety push to ensure GHCR metadata syncs..."
+                sudo podman push --compression-format=zstd --compression-level=2 "localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${tag}"
+                SUCCESS=true
+                break
+              fi
+              echo "Push failed, retrying in $((5 * i)) seconds..."
+              sleep $((5 * i))
+            done
+            if [ "$SUCCESS" = "false" ]; then
+              echo "::error::Failed to push tag $tag after $MAX_RETRIES retries."
+              exit 1
+            fi
+          done
+          
+          REMOTE_DIGEST=$(sudo skopeo inspect --format '{{.Digest}}' "docker://${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}")
+          echo "Captured remote digest: $REMOTE_DIGEST"
+          echo "${CURRENT_IMAGE_NAME}=${REMOTE_DIGEST}" >> digests.env
+          echo "::endgroup::"
+
+      - name: Build Flavor Images
+        id: build_flavors
+        if: steps.check_compatibility.outputs.should_skip != 'true'
+        env:
+          META_LABELS: ${{ steps.metadata.outputs.labels }}
+        run: |
+          set -x
+
+          # get labels from metadata action
+          while IFS= read -r label; do
+            if [[ -n "$label" ]]; then
+              BUILD_ARGS+=("--label" "$label")
+            fi
+          done <<< "$META_LABELS"
+
+          # Check if the manual 'no_cache' toggle was checked in the GitHub UI
+          if [ "${{ github.event.inputs.no_cache }}" == "true" ]; then
+            echo "Manual cache bust triggered. Appending --no-cache..."
+            BUILD_ARGS+=("--no-cache")
+          fi
+
+          # Check if the manual 'wipe_pkg_cache' toggle was checked in the GitHub UI
+          if [ "${{ github.event.inputs.wipe_pkg_cache }}" == "true" ]; then
+            echo "Manual wipe package cache triggered. Appending build arg..."
+            BUILD_ARGS+=("--build-arg" "WIPE_PKG_CACHE=true")
+          fi
+
+          FLAVORS=("plasma" "gnome" "niri")
+          
+          for FLAVOR in "${FLAVORS[@]}"; do
+            echo "::group::Building $FLAVOR"
+            CURRENT_IMAGE_NAME="cachyos-boppos-${FLAVOR}"
+            DOCKERFILE="Containerfile.${FLAVOR}"
+            FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$DEFAULT_TAG")
+
+            # For DE overlays, just build! They layer natively on the rechunked base.
+            sudo podman build "${BUILD_ARGS[@]}" "${FLAVOR_ARGS[@]}" \
+              --network=host \
+              --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
+            
+            echo "::endgroup::"
+          done
+
+      - name: Push Flavor Images to GHCR
+        if: steps.check_compatibility.outputs.should_skip != 'true' && github.event_name != 'pull_request'
+        id: push_flavors
+        env:
+          IMAGE_REGISTRY: ${{ env.IMAGE_REGISTRY }}
+          IMAGE_TAGS: ${{ steps.metadata.outputs.tags }}
+          MAX_RETRIES: 3
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -ex
+          
+          FLAVORS=("plasma" "gnome" "niri")
           
           for FLAVOR in "${FLAVORS[@]}"; do
             echo "::group::Pushing $FLAVOR"
-            CURRENT_IMAGE_NAME="cachyos-boppos-${FLAVOR}-test"
+            CURRENT_IMAGE_NAME="cachyos-boppos-${FLAVOR}"
             
             for tag in $IMAGE_TAGS; do
               SUCCESS=false
