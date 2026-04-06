@@ -4,8 +4,8 @@ on:
   pull_request:
     branches:
       - main
-#  schedule:
-#    - cron: "30 06 */2 * *" # 06:30am UTC every other day
+  schedule:
+    - cron: "30 06 */2 * *" # 06:30am UTC every other day
   workflow_dispatch:
     inputs:
       no_cache:
