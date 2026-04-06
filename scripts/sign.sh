@@ -4,6 +4,14 @@ set -euo pipefail
 # This script is called by the Justfile to handle image signing.
 # It's moved to a separate script to avoid complex shell escaping issues within the Justfile.
 
+# --- Dependency Check ---
+for cmd in cosign skopeo sudo; do
+    if ! command -v "$cmd" &> /dev/null; then
+        echo "Error: Required command '$cmd' is not installed." >&2
+        exit 1
+    fi
+done
+
 # --- Arguments from Justfile ---
 if [ "$#" -ne 2 ]; then
     echo "Usage: $0 <full_image_name> <architecture>" >&2
@@ -29,17 +37,25 @@ fi
 
 # Fetch the exact remote digest directly from the registry to account for GHCR mutations
 echo "Fetching remote digest from registry for ${FULL_IMAGE}:${ARCH}..."
-DIGEST=$(sudo skopeo inspect --authfile=/etc/containers/auth.json --format '{{.Digest}}' "docker://${FULL_IMAGE}:${ARCH}")
+
+# Use a temporary file for skopeo's stderr to provide better error messages
+SKOPEO_ERROR_LOG=$(mktemp)
+trap 'rm -f -- "$SKOPEO_ERROR_LOG"' EXIT
+
+DIGEST=$(sudo skopeo inspect --format '{{.Digest}}' "docker://${FULL_IMAGE}:${ARCH}" 2> "$SKOPEO_ERROR_LOG")
+
 if [ -z "$DIGEST" ]; then
-    echo "Error: Failed to fetch digest for ${FULL_IMAGE}:${ARCH} from registry." >&2
-    exit 1
+    # If authenticated inspect fails, try unauthenticated to isolate the cause
+    if skopeo inspect "docker://${FULL_IMAGE}:${ARCH}" &> /dev/null; then
+        echo "Error: Authenticated inspect failed, but unauthenticated inspect succeeded." >&2
+        echo "This confirms the issue is with the credentials in '/etc/containers/auth.json'. Please run 'sudo podman logout ghcr.io' and log back in with a PAT that has 'read:packages' scope." >&2
+    else
+        echo "Error: Both authenticated and unauthenticated inspects failed. This could be a network issue or the image tag may not exist." >&2
+    fi
+    echo -e "\nUnderlying error from skopeo:" >&2
+    cat "$SKOPEO_ERROR_LOG" >&2; exit 1
 fi
 
 echo "Signing image with digest: $DIGEST"
 
-# Execute the cosign command with sudo to handle registry authentication.
-# `sudo` allows cosign to use the root-owned credentials in /etc/containers/auth.json.
-# `sudo -E` is used to preserve the COSIGN_PRIVATE_KEY environment variable if it is set.
-# We also explicitly set REGISTRY_AUTH_FILE to ensure cosign finds the correct credentials,
-# mirroring the --authfile flag used in the Justfile's push recipe.
-sudo -E REGISTRY_AUTH_FILE=/etc/containers/auth.json cosign sign -y --new-bundle-format=false --use-signing-config=false $KEY_ARG "${FULL_IMAGE}:${ARCH}@${DIGEST}"
+cosign sign -y --new-bundle-format=false --use-signing-config=false $KEY_ARG "${FULL_IMAGE}:${ARCH}@${DIGEST}"
