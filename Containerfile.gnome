@@ -13,14 +13,17 @@ RUN pacman -Sy --noconfirm --needed \
     gnome gnome-tweaks gdm xorg-xwayland \
     xdg-desktop-portal xdg-desktop-portal-gnome xdg-desktop-portal-gtk \
     nautilus gnome-console gnome-text-editor ptyxis \
-    # --- GNOME Specific Themes ---
-    cachyos-gnome-settings && \
+    # --- Essential Desktop Utilities ---
+    file-roller extension-manager adw-gtk-theme dconf-editor \
+    gnome-shell-extension-appindicator sushi celluloid \
+    gnome-shell-extension-gsconnect && \
     # --- Cleanup ---
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/*
 
 # Enable DE services
 # We disable SDDM if it was enabled, and enable GDM
 RUN systemctl disable sddm.service || true && \
+    systemctl disable plasmalogin.service || true && \
     systemctl enable gdm.service && \
     systemctl --global enable install-flatpaks.service || true
 

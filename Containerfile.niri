@@ -10,9 +10,13 @@ FROM ghcr.io/ripps818/cachyos-boppos-base:${BASE_IMAGE_TAG}
 # ==========================================
 RUN pacman -Sy --noconfirm --needed \
     # --- Desktop Environment (Niri) Core ---
-    niri cachyos-niri-settings waybar swaybg fuzzel alacritty xorg-xwayland \
-    xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
-    polkit-gnome greetd greetd-tuigreet mako && \
+    niri cachyos-niri-noctalia fuzzel alacritty \
+    xorg-xwayland xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
+    polkit-gnome greetd greetd-tuigreet \
+    # --- Essential Desktop Utilities & Applets ---
+    nautilus loupe evince file-roller gnome-text-editor \
+    network-manager-applet blueman \
+    swaylock swayidle kdeconnect && \
     # --- Cleanup ---
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/*
 
@@ -23,6 +27,7 @@ RUN mkdir -p /etc/greetd && \
 
 # Enable DE services
 RUN systemctl disable sddm.service || true && \
+    systemctl disable plasmalogin.service || true && \
     systemctl enable greetd.service && \
     systemctl --global enable install-flatpaks.service || true
 

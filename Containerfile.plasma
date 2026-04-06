@@ -11,13 +11,15 @@ FROM ghcr.io/ripps818/cachyos-boppos-base:${BASE_IMAGE_TAG}
 RUN pacman -Sy --noconfirm --needed \
     # --- Desktop Environment (KDE Plasma) Core ---
     plasma-desktop plasma-workspace xorg-xwayland qt5-wayland qt6-wayland \
-    breeze-gtk sddm sddm-kcm powerdevil kscreen polkit-kde-agent \
+    breeze-gtk plasma-login-manager powerdevil kscreen polkit-kde-agent \
     xdg-desktop-portal xdg-desktop-portal-kde xdg-desktop-portal-gtk kde-gtk-config colord-kde \
     # --- Desktop Integration & Services ---
     plasma plasma-pa plasma-nm kwallet-pam udisks2 python-gobject \
     kio-extras kio-fuse kio-admin flatpak-kcm xdg-utils libappimage \
+    baloo kwayland-integration plasma5-integration appmenu-gtk-module \
     # --- KDE Utilities & Addons ---
     dolphin dolphin-plugins konsole kate ark spectacle kdeconnect \
+    gwenview okular kcalc \
     partitionmanager plasma-disks plasma-systemmonitor \
     kdialog filelight yakuake kfind kwalletmanager sweeper \
     # --- Plasma Specific Media & Themes ---
@@ -27,7 +29,10 @@ RUN pacman -Sy --noconfirm --needed \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/*
 
 # Enable DE services
-RUN systemctl enable sddm.service && \
+RUN systemctl disable sddm.service || true && \
+    systemctl disable gdm.service || true && \
+    systemctl enable plasmalogin.service && \
+    systemctl enable usr-share-sddm.mount && \
     systemctl --global enable install-flatpaks.service || true
 
 # Preserve /opt contents for OverlayFS
