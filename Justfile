@@ -32,13 +32,11 @@ push arch='v3' flavor='base': (rechunk arch flavor)
     @echo "Pushing cachyos-boppos-{{flavor}}:{{arch}}..."
     set -euo pipefail
     podman push \
-        --authfile /etc/containers/auth.json \
         --digestfile=/tmp/podman_push_digest_{{arch}}.txt \
         --compression-format=zstd \
         "{{registry}}/{{user}}/cachyos-boppos-{{flavor}}:{{arch}}"
     @echo "Performing safety push to ensure GHCR metadata syncs..."
     podman push \
-        --authfile /etc/containers/auth.json \
         --digestfile=/tmp/podman_push_digest_{{arch}}.txt \
         --compression-format=zstd \
         "{{registry}}/{{user}}/cachyos-boppos-{{flavor}}:{{arch}}"
@@ -61,6 +59,25 @@ sign arch='v3' flavor='base':
     @# The signing logic is complex and has shell escaping issues within Just.
     @# Moving it to a dedicated script makes it more robust and maintainable.
     @./scripts/sign.sh "{{registry}}/{{user}}/cachyos-boppos-{{flavor}}" "{{arch}}"
+
+# Verifies the signatures of all published images for a given architecture
+verify arch='v3':
+    #!/usr/bin/env bash
+    set -euo pipefail
+    REGISTRY="{{registry}}/{{user}}"
+    FLAVORS=("base" "plasma" "gnome" "niri")
+    
+    if [ ! -f "cosign.pub" ]; then
+        echo "Error: cosign.pub not found in the current directory."
+        exit 1
+    fi
+    
+    echo "Verifying signatures for architecture: {{arch}}"
+    for FLAVOR in "${FLAVORS[@]}"; do
+        echo -e "\n==> Verifying ${REGISTRY}/cachyos-boppos-${FLAVOR}:{{arch}}..."
+        cosign verify --key cosign.pub "${REGISTRY}/cachyos-boppos-${FLAVOR}:{{arch}}"
+    done
+    echo -e "\nAll images for {{arch}} verified successfully!"
 
 switch tag='v3' flavor='plasma':
     @echo "Transferring rootless image to root storage..."
