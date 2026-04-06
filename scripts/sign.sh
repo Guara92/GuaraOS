@@ -42,7 +42,16 @@ echo "Fetching remote digest from registry for ${FULL_IMAGE}:${ARCH}..."
 SKOPEO_ERROR_LOG=$(mktemp)
 trap 'rm -f -- "$SKOPEO_ERROR_LOG"' EXIT
 
-DIGEST=$(sudo skopeo inspect --format '{{.Digest}}' "docker://${FULL_IMAGE}:${ARCH}" 2> "$SKOPEO_ERROR_LOG")
+MAX_RETRIES=3
+DIGEST=""
+
+for i in $(seq 1 "${MAX_RETRIES}"); do
+    if DIGEST=$(sudo skopeo inspect --format '{{.Digest}}' "docker://${FULL_IMAGE}:${ARCH}" 2> "$SKOPEO_ERROR_LOG") && [ -n "$DIGEST" ]; then
+        break
+    fi
+    echo "Attempt $i/$MAX_RETRIES failed to fetch remote digest. Retrying in $((5 * i)) seconds..." >&2
+    sleep $((5 * i))
+done
 
 if [ -z "$DIGEST" ]; then
     # If authenticated inspect fails, try unauthenticated to isolate the cause

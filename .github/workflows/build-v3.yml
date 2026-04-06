@@ -251,7 +251,21 @@ jobs:
               fi
             done
             
-            REMOTE_DIGEST=$(sudo skopeo inspect --format '{{.Digest}}' "docker://${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}")
+            # Fetch remote digest with retries and explicit auth to account for GHCR private package visibility
+            SUCCESS_DIGEST=false
+            for i in $(seq "${MAX_RETRIES}"); do
+              if REMOTE_DIGEST=$(skopeo inspect --creds="${{ github.actor }}:${GITHUB_TOKEN}" --format '{{.Digest}}' "docker://${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"); then
+                SUCCESS_DIGEST=true
+                break
+              fi
+              echo "Failed to fetch remote digest, retrying in $((5 * i)) seconds..."
+              sleep $((5 * i))
+            done
+            if [ "$SUCCESS_DIGEST" = "false" ]; then
+              echo "::error::Failed to fetch remote digest for ${CURRENT_IMAGE_NAME} after ${MAX_RETRIES} retries."
+              exit 1
+            fi
+            
             echo "Captured remote digest: $REMOTE_DIGEST"
             echo "${CURRENT_IMAGE_NAME}=${REMOTE_DIGEST}" >> digests.env
             echo "::endgroup::"
