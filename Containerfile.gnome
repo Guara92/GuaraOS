@@ -14,7 +14,7 @@ RUN pacman -Sy --noconfirm --needed \
     xdg-desktop-portal xdg-desktop-portal-gnome xdg-desktop-portal-gtk \
     nautilus gnome-console gnome-text-editor ptyxis \
     # --- Essential Desktop Utilities ---
-    file-roller extension-manager adw-gtk-theme dconf-editor \
+    file-roller extension-manager adw-gtk-theme cachyos-nord-gtk-theme-git dconf-editor \
     gnome-shell-extension-appindicator sushi celluloid \
     gnome-shell-extension-gsconnect && \
     # --- Cleanup ---

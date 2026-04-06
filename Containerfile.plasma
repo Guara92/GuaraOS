@@ -24,7 +24,7 @@ RUN pacman -Sy --noconfirm --needed \
     kdialog filelight yakuake kfind kwalletmanager sweeper \
     # --- Plasma Specific Media & Themes ---
     ffmpegthumbnailer ffmpegthumbs kdegraphics-thumbnailers kimageformats qt6-imageformats \
-    cachyos-kde-settings cachyos-themes-sddm cachyos-emerald-kde-theme-git cachyos-nord-gtk-theme-git && \
+    cachyos-kde-settings cachyos-themes-sddm cachyos-emerald-kde-theme-git cachyos-nord-kde-theme-git cachyos-lavender-kde-theme-git cachyos-nord-gtk-theme-git && \
     # --- Cleanup ---
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/*
 

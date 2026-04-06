@@ -15,7 +15,7 @@ RUN pacman -Sy --noconfirm --needed \
     polkit-gnome greetd greetd-tuigreet \
     # --- Essential Desktop Utilities & Applets ---
     nautilus loupe evince file-roller gnome-text-editor \
-    network-manager-applet blueman \
+    network-manager-applet blueman cachyos-nord-gtk-theme-git \
     swaylock swayidle kdeconnect && \
     # --- Cleanup ---
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/*
