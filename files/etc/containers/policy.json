@@ -20,19 +20,10 @@
                     "keyPath": "/etc/pki/rpm-gpg/RPM-GPG-KEY-redhat-release"
                 }
             ],
-            "ghcr.io/lumaeris": [
+            "ghcr.io/bopp-os": [
                 {
                     "type": "sigstoreSigned",
-                    "keyPath": "/etc/pki/containers/lumaeris.pub",
-                    "signedIdentity": {
-                        "type": "matchRepository"
-                    }
-                }
-            ],
-            "ghcr.io/ripps818": [
-                {
-                    "type": "sigstoreSigned",
-                    "keyPath": "/etc/pki/containers/ripps818.pub",
+                    "keyPath": "/etc/pki/containers/bopp-os.pub",
                     "signedIdentity": {
                         "type": "matchRepository"
                     }

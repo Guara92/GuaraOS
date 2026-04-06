@@ -36,12 +36,18 @@ This is all very experimental. So use at your own risk.
 
 CachyOS BoppOS uses `just` as a command runner to simplify the build process. Ensure you have `just` and `podman` installed.
 
+The OS is built using a multi-image architecture. You must first build the `base` image, and then build your preferred desktop environment flavor (`plasma`, `gnome`, or `niri`) on top of it.
+
 ### x86-64-v3 Build (v3 Default)
 
 This build is compatible with most modern x86-64 hardware and is suitable for sharing or for use in CI/CD environments.
 
 ```bash
-just build
+# 1. Build the base image
+just build v3 base
+
+# 2. Build your preferred flavor (e.g., plasma, gnome, niri)
+just build v3 plasma
 ```
 
 ### x86-64-v4 Build (v4)
@@ -49,7 +55,11 @@ just build
 This enables optimizations for a wide range of modern CPUs (e.g., Intel Haswell and newer, AMD Excavator and newer) that support the x86-64-v4 microarchitecture level.
 
 ```bash
-just build v4
+# 1. Build the base image
+just build v4 base
+
+# 2. Build your preferred flavor (e.g., plasma, gnome, niri)
+just build v4 plasma
 ```
 
 ### Zen4/Zen5 Build (znver4)
@@ -57,7 +67,11 @@ just build v4
 If you are building on and for a system with an AMD Ryzen 7000 series CPU (or newer), you can enable native `znver4` optimizations for maximum performance.
 
 ```bash
-just build znver4
+# 1. Build the base image
+just build znver4 base
+
+# 2. Build your preferred flavor (e.g., plasma, gnome, niri)
+just build znver4 plasma
 ```
 
 ## Installation & Switching
@@ -77,7 +91,7 @@ A typical installation command would look like this:
 
 ```bash
 # Example:
-bootc install to-disk --image ghcr.io/ripps818/cachyos-boppos-bootc:latest /dev/sdX
+bootc install to-disk --image ghcr.io/bopp-os/cachyos-plasma:latest /dev/sdX
 ```
 
 ### Switching from an Existing bootc OS (e.g., Bazzite)
@@ -87,7 +101,7 @@ If you are already running a `bootc`-based system, you can switch to BoppOS dire
 To switch, run the following command, pointing to the BoppOS image in your registry:
 
 ```bash
-sudo bootc switch ghcr.io/ripps818/cachyos-boppos-bootc:latest
+sudo bootc switch ghcr.io/bopp-os/cachyos-plasma:latest
 ```
 
 Your system will download the new image and stage it for the next boot.
