@@ -10,7 +10,7 @@ FROM ghcr.io/bopp-os/cachyos-base:${BASE_IMAGE_TAG}
 # ==========================================
 RUN pacman -Sy --noconfirm --needed \
     # --- Desktop Environment (GNOME) Core ---
-    gnome gnome-tweaks gdm xorg-xwayland \
+    gnome gnome-shell mutter gnome-session gnome-tweaks gdm xorg-xwayland \
     xdg-desktop-portal xdg-desktop-portal-gnome xdg-desktop-portal-gtk \
     nautilus gnome-console gnome-text-editor ptyxis \
     # --- Essential Desktop Utilities ---
