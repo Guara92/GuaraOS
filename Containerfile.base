@@ -137,7 +137,7 @@ RUN mkdir -p /usr/lib/dracut/dracut.conf.d && \
 
 # Backfill user.component attributes for the original CachyOS base image packages.
 # Subsequent package installs will be handled automatically by the ALPM hook.
-RUN pacman -Qq | /usr/libexec/assign-usercomponent.sh
+RUN COMPONENT_TAG="default-base" pacman -Qq | /usr/libexec/assign-usercomponent.sh
 
 # ==========================================
 # CPU ARCHITECTURE REPOSITORY SETUP
