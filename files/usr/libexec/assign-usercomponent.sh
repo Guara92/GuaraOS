@@ -11,7 +11,8 @@ while read -r pkgname; do
     while read -r filepath; do
         # Only target regular files (ignore symlinks and directories)
         if [[ -f "$filepath" && ! -L "$filepath" ]]; then
-            setfattr -n user.component -v "$pkgname" "$filepath"
+            # Group by COMPONENT_TAG if set, otherwise fallback to individual package names
+            setfattr -n user.component -v "${COMPONENT_TAG:-$pkgname}" "$filepath"
         fi
     done <<< "$file_list"
 done

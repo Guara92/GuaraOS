@@ -143,6 +143,7 @@ RUN pacman -Qq | /usr/libexec/assign-usercomponent.sh
 # CPU ARCHITECTURE REPOSITORY SETUP
 # ==========================================
 RUN --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    export COMPONENT_TAG="arch-optimizations" && \
     rm -f /usr/lib/sysimage/cache/pacman/pkg/lua* && \
     rm -f /usr/lib/sysimage/cache/pacman/pkg/*.part && \
     pacman -Sc --noconfirm && \
@@ -167,71 +168,115 @@ RUN --mount=type=tmpfs,dst=/run \
 # MASTER PACKAGE INSTALLATION
 # ==========================================
 RUN --mount=type=tmpfs,dst=/run \
-    --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Rdd --noconfirm pulseaudio pulseaudio-bluetooth mesa-git lib32-mesa-git || echo "Conflicting packages not found, skipping." && \
-    pacman -Sy --noconfirm --needed --assume-installed lib32-gst-plugins-base-libs \
-        # --- System Core ---
-        linux-cachyos linux-cachyos-headers systemd systemd-sysvcompat \
-        dbus dbus-broker-units dbus-glib glib2 polkit shadow lua-luv \
-        dracut ostree bootc skopeo gpgme gnupg ufw \
-        # --- Filesystems & Storage ---
-        fuse2 fuse3 fuse2fs ntfs-3g dosfstools exfatprogs btrfs-progs lvm2 mdadm cryptsetup \
-        libdisplay-info lib32-libdisplay-info gvfs gvfs-mtp gvfs-smb \
-        nfs-utils smartmontools \
-        # --- Firmware & Microcode ---
-        amd-ucode intel-ucode linux-firmware sof-firmware alsa-firmware wireless-regdb linux-firmware-marvell \
-        # --- CachyOS Base Settings ---
-        cachyos-settings cachyos-micro-settings cachyos-ananicy-rules cachyos-zsh-config cachyos-fish-config cachyos-samba-settings \
-        # --- Graphics & Drivers ---
-        mesa lib32-mesa mesa-utils vulkan-icd-loader vulkan-mesa-layers \
-        vulkan-intel vulkan-radeon intel-media-driver vulkan-nouveau \
-        lib32-vulkan-mesa-layers lib32-vulkan-intel lib32-vulkan-radeon lib32-vulkan-nouveau \
-        # --- Power & Hardware Management ---
-        power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs mousetweaks radeontool fwupd \
-        # --- Audio Core ---
-        pipewire-pulse pipewire-alsa pipewire-jack wireplumber pavucontrol alsa-utils alsa-plugins \
-        # --- Shells & Prompts ---
-        bash zsh fish bash-preexec bash-completion zsh-completions oh-my-zsh-git \
-        atuin starship \
-        # --- CLI Utilities ---
-        zoxide eza ripgrep tealdeer fd fzf jq btop iotop-c konsave \
-        conky sysstat htop neofetch glances procs bottom rsync rclone wl-clipboard \
-        procps-ng curl wget file man-db man-pages openssh openssl \
-        # --- Text Editors ---
-        nano nano-syntax-highlighting micro vi \
-        # --- Development Base ---
-        base-devel meld git git-lfs tig github-cli paru just cosign \
-        # --- Archiving & Compression ---
-        unp unarj unrar unzip zip bzip2 p7zip unace cpio sharutils cabextract rpmextract xz \
-        # --- Networking & VPNs ---
-        networkmanager networkmanager-openvpn wpa_supplicant iwd ethtool dnsutils \
-        modemmanager usb_modeswitch nss-mdns bluez bluez-utils bluez-libs bluez-obex bluedevil \
-        openvpn wireguard-tools pptpclient \
-        mullvad-vpn mullvad-vpn-daemon cloudflare-warp-bin tailscale \
-        # --- Containers & Virtualization ---
-        docker docker-compose podman podman-compose distrobox flatpak ptyxis \
-        # --- CPU Schedulers ---
-        scx-scheds-git scx-tools-git scx-manager \
-        # --- Shared Desktop Integration & Fonts ---
-        xdg-utils libappimage gtk3 gtk4 nss libnotify libxss libappindicator-gtk3 libsecret \
-        cups cups-pdf system-config-printer sane \
-        ttf-ms-fonts ttf-dejavu ttf-bitstream-vera ttf-ubuntu-font-family \
-        noto-fonts noto-fonts-cjk noto-fonts-emoji nerd-fonts \
-        cachyos-wallpapers cachyos-plymouth-theme cachyos-plymouth-bootanimation \
-        # --- Shared Gaming Core & Utilities ---
-        cachyos-gaming-meta cachyos-gaming-applications \
-        xorg-xwininfo xdotool yad winboat proton-cachyos wine gamescope-session-git \
-        sunshine lact coolercontrol openrgb openrgb-plugin-effects-git nvtop \
-        lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid \
-        goverlay pascube vkbasalt vkbasalt-cli libdvdcss gst-libav mpv-git ffmpeg vlc gpu-screen-recorder-ui \
-        # --- Shared Languages & IDEs ---
-        nodejs npm rust go python-pip python-pipx ruby php \
-        cargo-binstall cargo-update visual-studio-code-bin helium-browser-bin && \
-    if [ -e /usr/etc ]; then \
-        echo "Workaround: mitigating rogue /usr/etc to satisfy bootc..." && \
-        if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && \
-        rm -rf /usr/etc; \
-    fi
+    pacman -Rdd --noconfirm pulseaudio pulseaudio-bluetooth mesa-git lib32-mesa-git || echo "Conflicting packages not found, skipping."
+
+# --- System Core ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="system-core" pacman -Sy --noconfirm --needed \
+    linux-cachyos linux-cachyos-headers systemd systemd-sysvcompat dbus dbus-broker-units dbus-glib glib2 polkit shadow lua-luv dracut ostree bootc skopeo gpgme gnupg ufw && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Filesystems & Storage ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="filesystems" pacman -Sy --noconfirm --needed \
+    fuse2 fuse3 fuse2fs ntfs-3g dosfstools exfatprogs btrfs-progs lvm2 mdadm cryptsetup libdisplay-info lib32-libdisplay-info gvfs gvfs-mtp gvfs-smb nfs-utils smartmontools && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Firmware & Microcode ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="firmware" pacman -Sy --noconfirm --needed \
+    amd-ucode intel-ucode linux-firmware sof-firmware alsa-firmware wireless-regdb linux-firmware-marvell && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- CachyOS Base Settings ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="cachyos-settings" pacman -Sy --noconfirm --needed \
+    cachyos-settings cachyos-micro-settings cachyos-ananicy-rules cachyos-zsh-config cachyos-fish-config cachyos-samba-settings && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Graphics & Drivers ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="graphics-drivers" pacman -Sy --noconfirm --needed \
+    mesa lib32-mesa mesa-utils vulkan-icd-loader vulkan-mesa-layers vulkan-intel vulkan-radeon intel-media-driver vulkan-nouveau lib32-vulkan-mesa-layers lib32-vulkan-intel lib32-vulkan-radeon lib32-vulkan-nouveau && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Power & Hardware Management ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="hardware-management" pacman -Sy --noconfirm --needed \
+    power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs mousetweaks radeontool fwupd && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Audio Core ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="audio" pacman -Sy --noconfirm --needed \
+    pipewire-pulse pipewire-alsa pipewire-jack wireplumber pavucontrol alsa-utils alsa-plugins && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Shells & Prompts ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="shells" pacman -Sy --noconfirm --needed \
+    bash zsh fish bash-preexec bash-completion zsh-completions oh-my-zsh-git atuin starship && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- CLI Utilities ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="cli-utilities" pacman -Sy --noconfirm --needed \
+    zoxide eza ripgrep tealdeer fd fzf jq btop iotop-c konsave conky sysstat htop neofetch glances procs bottom rsync rclone wl-clipboard procps-ng curl wget file man-db man-pages openssh openssl && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Text Editors ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="text-editors" pacman -Sy --noconfirm --needed \
+    nano nano-syntax-highlighting micro vi && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Development Base ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="devel-base" pacman -Sy --noconfirm --needed \
+    base-devel meld git git-lfs tig github-cli paru just cosign && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Archiving & Compression ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="archiving" pacman -Sy --noconfirm --needed \
+    unp unarj unrar unzip zip bzip2 p7zip unace cpio sharutils cabextract rpmextract xz && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Networking & VPNs ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="networking" pacman -Sy --noconfirm --needed \
+    networkmanager networkmanager-openvpn wpa_supplicant iwd ethtool dnsutils modemmanager usb_modeswitch nss-mdns bluez bluez-utils bluez-libs bluez-obex bluedevil openvpn wireguard-tools pptpclient mullvad-vpn mullvad-vpn-daemon cloudflare-warp-bin tailscale && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Containers & Virtualization ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="containers" pacman -Sy --noconfirm --needed \
+    docker docker-compose podman podman-compose distrobox flatpak ptyxis && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- CPU Schedulers ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="schedulers" pacman -Sy --noconfirm --needed \
+    scx-scheds-git scx-tools-git scx-manager && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Shared Desktop Integration & Fonts ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="desktop-fonts" pacman -Sy --noconfirm --needed \
+    xdg-utils libappimage gtk3 gtk4 nss libnotify libxss libappindicator-gtk3 libsecret cups cups-pdf system-config-printer sane ttf-ms-fonts ttf-dejavu ttf-bitstream-vera ttf-ubuntu-font-family noto-fonts noto-fonts-cjk noto-fonts-emoji nerd-fonts cachyos-wallpapers cachyos-plymouth-theme cachyos-plymouth-bootanimation && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Shared Gaming Core & Utilities ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="gaming-core" pacman -Sy --noconfirm --needed \
+    cachyos-gaming-meta cachyos-gaming-applications xorg-xwininfo xdotool yad winboat proton-cachyos wine gamescope-session-git sunshine lact coolercontrol openrgb openrgb-plugin-effects-git nvtop lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid goverlay pascube vkbasalt vkbasalt-cli libdvdcss gst-libav mpv-git ffmpeg vlc gpu-screen-recorder-ui && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Shared Languages & IDEs ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="languages-ides" pacman -Sy --noconfirm --needed \
+    nodejs npm rust go python-pip python-pipx ruby php cargo-binstall cargo-update visual-studio-code-bin && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # ==========================================
 # POST-INSTALL CONFIGURATION
@@ -254,7 +299,7 @@ RUN chmod -R 0755 /usr/bin /usr/share/libalpm/scripts
 # Install AUR packages from Stage 1
 COPY --from=aur_builder /home/builduser/packages/ /tmp/aur-pkgs/
 RUN --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
+    COMPONENT_TAG="aur-packages" pacman -U --noconfirm /tmp/aur-pkgs/*.pkg.tar.zst && \
     rm -rf /tmp/aur-pkgs && \
     if [ -e /usr/etc ]; then \
         echo "Workaround: mitigating rogue /usr/etc to satisfy bootc..." && \

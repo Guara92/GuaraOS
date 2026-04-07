@@ -8,22 +8,27 @@ FROM ghcr.io/bopp-os/cachyos-base:${BASE_IMAGE_TAG}
 # ==========================================
 # MASTER PACKAGE INSTALLATION
 # ==========================================
-RUN pacman -Sy --noconfirm --needed \
-    # --- Desktop Environment (GNOME) Core ---
+
+# --- Desktop Environment (GNOME) Core ---
+RUN COMPONENT_TAG="gnome-core" pacman -Sy --noconfirm --needed \
     gnome gnome-shell mutter gnome-session gnome-tweaks gdm xorg-xwayland \
     xdg-desktop-portal xdg-desktop-portal-gnome xdg-desktop-portal-gtk \
-    nautilus gnome-console gnome-text-editor ptyxis \
-    # --- Essential Desktop Utilities ---
-    file-roller extension-manager adw-gtk-theme cachyos-nord-gtk-theme-git dconf-editor \
-    gnome-shell-extension-appindicator sushi celluloid \
-    gnome-shell-extension-gsconnect && \
-    # --- Cleanup ---
+    nautilus gnome-console gnome-text-editor ptyxis && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
-    if [ -e /usr/etc ]; then \
-        echo "Workaround: mitigating rogue /usr/etc to satisfy bootc..." && \
-        if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && \
-        rm -rf /usr/etc; \
-    fi
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Essential Desktop Utilities ---
+RUN COMPONENT_TAG="gnome-utilities" pacman -Sy --noconfirm --needed \
+    file-roller extension-manager adw-gtk-theme cachyos-nord-gtk-theme-git dconf-editor \
+    gnome-shell-extension-appindicator sushi celluloid gnome-shell-extension-gsconnect && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Web Browsers ---
+RUN COMPONENT_TAG="web-browsers" pacman -Sy --noconfirm --needed \
+    helium-browser-bin cachyos-firefox-settings && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # Enable DE services
 # We disable SDDM if it was enabled, and enable GDM

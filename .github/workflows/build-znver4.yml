@@ -132,8 +132,8 @@ jobs:
           echo "${GITHUB_TOKEN}" | sudo podman login -u "${LOGIN_USER}" --password-stdin "ghcr.io"
           echo "${GITHUB_TOKEN}" | docker login -u "${LOGIN_USER}" --password-stdin "ghcr.io" # For cosign
 
-      - name: Build & Rechunk Base Image
-        id: build_rechunk_base
+      - name: Build Base Image
+        id: build_base
         if: steps.check_compatibility.outputs.should_skip != 'true'
         env:
           META_LABELS: ${{ steps.metadata.outputs.labels }}
@@ -177,29 +177,11 @@ jobs:
             --network=host \
             --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
 
-          echo "Rechunking base image..."
-          IMAGE_REF="localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
-          ARCHIVE_PATH="${{ github.workspace }}/rechunked_base.tar"
-
-          # Run chunkah
-          sudo podman run --rm --network=none \
-            --mount=type=image,source=$IMAGE_REF,target=/chunkah \
-            -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
-            quay.io/coreos/chunkah build --compressed --compression-level 2 --label containers.bootc=1 --max-layers 256 --prune /var/cache/ --prune /var/log/ --prune /tmp/ --prune /var/tmp/ > "$ARCHIVE_PATH"
-
-          sudo podman rmi -f "$IMAGE_REF"
-          sudo podman system prune -f
-          sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt
-          sudo rm -f "$ARCHIVE_PATH"
-
-          IMAGE_ID=$(cat /tmp/podman_load_output.txt | grep "Loaded image" | awk '{print $3}')
-          sudo podman tag "$IMAGE_ID" "$IMAGE_REF"
-          
           # Ensure the local base image is tagged properly so the DE overlays can layer onto it!
-          sudo podman tag "$IMAGE_REF" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
+          sudo podman tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
           echo "::endgroup::"
 
-      - name: Build Flavor Images
+      - name: Build & Rechunk Flavor Images
         id: build_flavors
         if: steps.check_compatibility.outputs.should_skip != 'true'
         env:
@@ -239,6 +221,24 @@ jobs:
               --network=host \
               --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
             
+            echo "Rechunking $FLAVOR image..."
+            IMAGE_REF="localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
+            ARCHIVE_PATH="${{ github.workspace }}/rechunked_${FLAVOR}.tar"
+
+            # Run chunkah
+            sudo podman run --rm --network=none \
+              --mount=type=image,source=$IMAGE_REF,target=/chunkah \
+              -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
+              quay.io/coreos/chunkah build --compressed --compression-level 6 --label containers.bootc=1 --max-layers 128 --prune /var/cache/ --prune /var/log/ --prune /tmp/ --prune /var/tmp/ > "$ARCHIVE_PATH"
+
+            sudo podman rmi -f "$IMAGE_REF"
+            sudo podman system prune -f
+            sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt
+            sudo rm -f "$ARCHIVE_PATH"
+
+            IMAGE_ID=$(cat /tmp/podman_load_output.txt | grep "Loaded image" | awk '{print $3}')
+            sudo podman tag "$IMAGE_ID" "$IMAGE_REF"
+
             echo "::endgroup::"
           done
 
@@ -262,7 +262,7 @@ jobs:
             for tag in $IMAGE_TAGS; do
               SUCCESS=false
               for i in $(seq "${MAX_RETRIES}"); do
-                if sudo podman push --compression-format=zstd --compression-level=2 "localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${tag}"; then
+                if sudo podman push --compression-format=zstd --compression-level=6 "localhost/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${tag}"; then
                   SUCCESS=true
                   break
                 fi
