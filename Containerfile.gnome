@@ -19,8 +19,27 @@ RUN COMPONENT_TAG="gnome-core" pacman -Sy --noconfirm --needed \
 
 # --- Essential Desktop Utilities ---
 RUN COMPONENT_TAG="gnome-utilities" pacman -Sy --noconfirm --needed \
-    file-roller extension-manager adw-gtk-theme cachyos-nord-gtk-theme-git dconf-editor \
-    gnome-shell-extension-appindicator sushi celluloid gnome-shell-extension-gsconnect && \
+    file-roller extension-manager dconf-editor && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- GNOME Themes ---
+RUN COMPONENT_TAG="gnome-themes" pacman -Sy --noconfirm --needed \
+    adw-gtk-theme cachyos-nord-gtk-theme-git && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- GNOME Extensions ---
+RUN COMPONENT_TAG="gnome-extensions" pacman -Sy --noconfirm --needed \
+    gnome-shell-extension-appindicator gnome-shell-extension-gsconnect gnome-shell-extension-dash-to-dock \
+    gnome-shell-extension-no-overview gnome-browser-connector gnome-shell-extension-gnome-ui-tune-git \
+    gnome-shell-extension-arc-menu gnome-shell-extension-caffeine gnome-shell-extension-vitals gnome-shell-extension-bing-wallpaper && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- GNOME Media ---
+RUN COMPONENT_TAG="gnome-media" pacman -Sy --noconfirm --needed \
+    sushi celluloid && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
