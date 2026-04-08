@@ -107,7 +107,32 @@ echo "--- [2/6] Reconciling User IDs (Heart Transplant) ---"
 cp /usr/etc/passwd /etc/passwd.new
 awk -F: 'NR==FNR{seen[$1]=1; next} !seen[$1]' /usr/etc/passwd /etc/passwd >> /etc/passwd.new
 
-cp /usr/etc/group /etc/group.new
+# Merge group (Prioritize Arch base, but preserve local group members)
+awk -F: -v OFS=: '
+NR==FNR {
+    members[$1] = $4
+    next
+}
+{
+    if ($1 in members && members[$1] != "") {
+        if ($4 == "") {
+            $4 = members[$1]
+        } else {
+            n = split($4 "," members[$1], arr, ",")
+            new_members = ""
+            split("", seen_u)
+            for (i=1; i<=n; i++) {
+                if (arr[i] != "" && !seen_u[arr[i]]) {
+                    new_members = (new_members == "" ? arr[i] : new_members "," arr[i])
+                    seen_u[arr[i]] = 1
+                }
+            }
+            $4 = new_members
+        }
+    }
+    print $0
+}' /etc/group /usr/etc/group > /etc/group.new
+
 awk -F: 'NR==FNR{seen[$1]=1; next} !seen[$1]' /usr/etc/group /etc/group >> /etc/group.new
 
 # 2. Merge shadow and gshadow (Prioritize local passwords, append new base users)
