@@ -12,7 +12,7 @@ FROM ghcr.io/bopp-os/cachyos-base:${BASE_IMAGE_TAG}
 # --- Desktop Environment (Niri) Core ---
 RUN COMPONENT_TAG="niri-core" pacman -Sy --noconfirm --needed \
     niri cachyos-niri-noctalia fuzzel alacritty \
-    xorg-xwayland xdg-desktop-portal xdg-desktop-portal-wlr xdg-desktop-portal-gtk \
+    xwayland-satellite xdg-desktop-portal xdg-desktop-portal-gnome xdg-desktop-portal-gtk \
     polkit-gnome greetd greetd-regreet sway && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
@@ -31,7 +31,7 @@ RUN COMPONENT_TAG="niri-applets-integration" pacman -Sy --noconfirm --needed \
 
 # --- Themes & Aesthetics ---
 RUN COMPONENT_TAG="niri-themes-aesthetics" pacman -Sy --noconfirm --needed \
-    cachyos-nord-gtk-theme-git && \
+    cachyos-nord-gtk-theme-git papirus-icon-theme && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
@@ -53,8 +53,17 @@ fit = "Cover"\n\
 \n\
 [GTK]\n\
 application_prefer_dark_theme = true\n\
-theme_name = "CachyOS-Nord"\n\
+theme_name = "cachyos-nord"\n\
+cursor_theme_name = "capitaine-cursors"\n\
 font_name = "Noto Sans 16"\n' > /etc/regreet.toml
+
+# Set Global GTK & Icon Theme Defaults
+RUN printf "[org.gnome.desktop.interface]\n\
+icon-theme='Papirus'\n\
+gtk-theme='cachyos-nord'\n\
+cursor-theme='capitaine-cursors'\n\
+color-scheme='prefer-dark'\n" > /usr/share/glib-2.0/schemas/99-boppos-theme.gschema.override && \
+    glib-compile-schemas /usr/share/glib-2.0/schemas/
 
 # Enable DE services
 RUN systemctl disable sddm.service || true && \
