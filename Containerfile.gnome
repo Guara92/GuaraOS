@@ -47,8 +47,7 @@ RUN COMPONENT_TAG="gnome-media" pacman -Sy --noconfirm --needed \
 # We disable SDDM if it was enabled, and enable GDM
 RUN systemctl disable sddm.service || true && \
     systemctl disable plasmalogin.service || true && \
-    systemctl enable gdm.service && \
-    systemctl --global enable install-flatpaks.service || true
+    systemctl enable gdm.service
 
 # Preserve /opt contents for OverlayFS
 # (visual-studio-code-bin and others install here)

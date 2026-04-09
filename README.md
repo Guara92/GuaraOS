@@ -15,7 +15,17 @@ This is all very experimental. So use at your own risk.
 - **Desktop First:** Stripped away Steam Deck/handheld-specific UI elements and scaling tweaks in favor of standard desktop environments (with support for KDE Plasma, GNOME, and Niri).
 - **Developer Ready:** Pre-installed essentials like Distrobox, Homebrew (`brew`), Docker, VS Code, Node.js, Rust, and Python.
 - **Streamlined Management:** Integrated `just` for simplified building and introduced custom tools like `boppos-update` for seamless OS updates, `bopp-migrate` for transitioning from Fedora atomic systems, and `bopp-tpm-refresh` to easily handle LUKS/TPM2 decryption.
-- **Automated Flatpaks:** Includes user-level services to automatically install and maintain essential Flatpak applications upon first boot.
+```bash
+boppos-update
+```
+```bash
+bopp-tpm-refresh
+```
+- **Optional Flatpaks:** Includes an interactive script (`install-optional-flatpaks`) to easily fetch, customize, and install a curated list of essential Flatpak applications.
+To use it, simply open your terminal and run:
+```bash
+install-optional-flatpaks
+```
 
 ## Key Features
 
@@ -32,7 +42,7 @@ This is all very experimental. So use at your own risk.
   - `distrobox`, `docker` & `docker-compose`
   - `nodejs`, `npm`, `rust`, `python-pip`, `python-pipx`
   - `visual-studio-code-bin`
-- **Seamless Setup & Migration**: Features custom scripts to transition safely from other atomic distributions (`bopp-migrate`) and automate Flatpak setup upon first boot.
+- **Seamless Setup & Migration**: Features custom scripts to transition safely from other atomic distributions (`bopp-migrate`).
 - **Hardware Encryption Utility**: Includes `bopp-tpm-refresh` to automatically re-enroll LUKS TPM2 encryption keys after system updates or migrations.
 - **Enhanced Shell**: A pre-configured shell environment with `starship`, `zoxide`, and `eza` for a modern terminal experience.
 

@@ -48,8 +48,7 @@ RUN COMPONENT_TAG="kde-themes-aesthetics" pacman -Sy --noconfirm --needed \
 RUN systemctl disable sddm.service || true && \
     systemctl disable gdm.service || true && \
     systemctl enable plasmalogin.service && \
-    systemctl enable usr-share-sddm.mount && \
-    systemctl --global enable install-flatpaks.service || true
+    systemctl enable usr-share-sddm.mount
 
 # Preserve /opt contents for OverlayFS
 RUN if [ -d /var/opt ] && [ "$(ls -A /var/opt)" ]; then \

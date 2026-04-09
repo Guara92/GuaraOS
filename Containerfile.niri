@@ -68,8 +68,7 @@ color-scheme='prefer-dark'\n" > /usr/share/glib-2.0/schemas/99-boppos-theme.gsch
 # Enable DE services
 RUN systemctl disable sddm.service || true && \
     systemctl disable plasmalogin.service || true && \
-    systemctl enable greetd.service && \
-    systemctl --global enable install-flatpaks.service || true
+    systemctl enable greetd.service
 
 # Preserve /opt contents for OverlayFS
 # (visual-studio-code-bin and others install here)
