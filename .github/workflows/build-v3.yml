@@ -33,7 +33,7 @@ concurrency:
 jobs:
   build_push:
     name: Build and push image (v3)
-    runs-on: x86-64-v3
+    runs-on: self-hosted
 
     permissions:
       contents: read
