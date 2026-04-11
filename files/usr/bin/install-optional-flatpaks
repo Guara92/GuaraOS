@@ -9,7 +9,7 @@ echo " BoppOS Optional Flatpak Installer"
 echo "=========================================="
 
 BAZZITE_URL="https://raw.githubusercontent.com/ublue-os/bazzite-dx/refs/heads/main/system_files/etc/ublue-os/system_flatpaks"
-BOPPOS_LIST="/usr/share/boppos/optional-flatpaks.txt"
+BOPPOS_LIST="/usr/share/boppos/boppos-flatpaks.txt"
 TMP_LIST=$(mktemp /tmp/boppos_flatpaks.XXXXXX)
 trap 'rm -f "$TMP_LIST"' EXIT
 
