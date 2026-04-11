@@ -356,7 +356,8 @@ RUN for f in \
     /usr/lib/ssh/ssh-keysign \
     ; do if [ -f "$f" ]; then chmod 4755 "$f"; fi; done
 
-RUN systemd-sysusers
+RUN echo 'g sambashare - -' > /usr/lib/sysusers.d/sambashare.conf && \
+    systemd-sysusers
 
 # Disable SELinux labeling in Podman
 RUN mkdir -p /etc/containers/containers.conf.d && \
@@ -387,7 +388,8 @@ RUN mkdir -p /usr/lib/opt && \
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     mkdir -p /run /tmp && \
     bash /bootcrew-shared/bootc-rootfs.sh && \
-    rm -rf /bootcrew-shared
+    rm -rf /bootcrew-shared && \
+    rm -rf /run/* /run/.[!.]* /tmp/* /tmp/.[!.]* 2>/dev/null || true
 
 RUN ln -sf ../usr/lib/os-release /etc/os-release
 RUN ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
