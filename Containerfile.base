@@ -90,7 +90,7 @@ COPY --from=brew /system_files /
 RUN setfattr -n user.component -v "homebrew" "/usr/share/homebrew.tar.zst"
 
 # Copy the shared directory from the bootcrew/mono repo
-COPY --from=aur_builder /tmp/bootcrew-mono/shared /tmp/bootcrew-shared
+COPY --from=aur_builder /tmp/bootcrew-mono/shared /bootcrew-shared
 
 # Copy configured pacman environment from aur_builder
 COPY --from=aur_builder /etc/pacman.conf /etc/pacman.conf
@@ -375,7 +375,7 @@ RUN systemctl enable var-opt.mount && \
 
 # Bootc / Dracut Fixes
 RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
-    bash /tmp/bootcrew-shared/initramfs.sh
+    bash /bootcrew-shared/initramfs.sh
 
 # Preserve /opt contents for OverlayFS
 RUN mkdir -p /usr/lib/opt && \
@@ -386,8 +386,8 @@ RUN mkdir -p /usr/lib/opt && \
 # Final system setup and cleanup
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
     mkdir -p /run /tmp && \
-    bash /tmp/bootcrew-shared/bootc-rootfs.sh && \
-    rm -rf /tmp/bootcrew-shared
+    bash /bootcrew-shared/bootc-rootfs.sh && \
+    rm -rf /bootcrew-shared
 
 RUN ln -sf ../usr/lib/os-release /etc/os-release
 RUN ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
