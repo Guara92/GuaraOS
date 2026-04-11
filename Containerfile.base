@@ -37,7 +37,6 @@ RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/c
     pacman -Sy --noconfirm --needed cachyos-keyring archlinux-keyring cachyos-mirrorlist cachyos-v3-mirrorlist cachyos-v4-mirrorlist cachyos-hooks chwd cachyos-rate-mirrors lsb-release gpgme && \
     pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst' && \
     cachyos-rate-mirrors && \
-    echo -e '\n[bootc]\nSigLevel = Never\nServer=https://github.com/hecknt/arch-bootc-pkgs/releases/download/$repo' >> /etc/pacman.conf && \
     echo -e '\n[chaotic-aur]\nInclude = /etc/pacman.d/chaotic-mirrorlist' >> /etc/pacman.conf && \
     if [ "$TARGET_CPU_MARCH" = "znver4" ]; then \
         printf "[cachyos-znver4]\nInclude = /etc/pacman.d/cachyos-v4-mirrorlist\n\n[cachyos-core-znver4]\nInclude = /etc/pacman.d/cachyos-v4-mirrorlist\n\n[cachyos-extra-znver4]\nInclude = /etc/pacman.d/cachyos-v4-mirrorlist\n\n" > /tmp/znver4-repos.conf && \
@@ -65,6 +64,9 @@ RUN --mount=type=cache,id=boppos-builder-cache-${TARGET_CPU_MARCH},target=/var/c
     cd /tmp/autofs && \
     sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
 
+# Clone bootcrew/mono to access their shared setup scripts
+RUN git clone https://github.com/bootcrew/mono.git /tmp/bootcrew-mono
+
 # ==========================================
 # STAGE 2: System Build
 # ==========================================
@@ -87,6 +89,9 @@ RUN --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysim
 COPY --from=brew /system_files /
 RUN setfattr -n user.component -v "homebrew" "/usr/share/homebrew.tar.zst"
 
+# Copy the shared directory from the bootcrew/mono repo
+COPY --from=aur_builder /tmp/bootcrew-mono/shared /tmp/bootcrew-shared
+
 # Copy configured pacman environment from aur_builder
 COPY --from=aur_builder /etc/pacman.conf /etc/pacman.conf
 COPY --from=aur_builder /etc/pacman.d /etc/pacman.d
@@ -101,7 +106,6 @@ RUN rm -rf /etc/pacman.d/gnupg && \
     pacman-key --lsign-key 5DE6BF3EBC86402E7A5C5D241FA48C960F9604CB && \
     pacman-key --lsign-key 3056513887B78AEB && \
     pacman -U --noconfirm 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-keyring.pkg.tar.zst' 'https://cdn-mirror.chaotic.cx/chaotic-aur/chaotic-mirrorlist.pkg.tar.zst'
-
 
 # Ensure the log file exists
 RUN touch /var/log/pacman.log
@@ -156,14 +160,6 @@ RUN --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysim
     fi && \
     pacman -Syu --noconfirm
 
-# Remove base kernels/handheld packages if present in the base image
-RUN --mount=type=tmpfs,dst=/run \
-    pacman -Rns --noconfirm linux linux-cachyos-deckify linux-cachyos-deckify-headers cachyos-handheld plasma-login-manager || echo "Unwanted base packages not found, skipping."
-
-# Ensure Discover and PackageKit are completely removed
-RUN --mount=type=tmpfs,dst=/run \
-    pacman -Rns --noconfirm discover packagekit packagekit-qt5 packagekit-qt6 || echo "Discover/PackageKit not found, skipping."
-
 # ==========================================
 # MASTER PACKAGE INSTALLATION
 # ==========================================
@@ -173,13 +169,19 @@ RUN --mount=type=tmpfs,dst=/run \
 # --- System Core ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="system-core" pacman -Sy --noconfirm --needed \
-    linux-cachyos linux-cachyos-headers systemd systemd-sysvcompat dbus dbus-broker-units dbus-glib glib2 polkit shadow lua-luv dracut ostree bootc skopeo gpgme gnupg ufw && \
+    linux-cachyos linux-cachyos-headers systemd systemd-sysvcompat dbus dbus-broker-units dbus-glib glib2 polkit shadow lua-luv gpgme gnupg ufw && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Bootc Dependencies ---
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="bootc" pacman -Sy --noconfirm --needed \
+    bootc dracut ostree skopeo containers-common btrfs-progs e2fsprogs xfsprogs dosfstools && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Filesystems & Storage ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="filesystems" pacman -Sy --noconfirm --needed \
-    fuse2 fuse3 fuse2fs ntfs-3g dosfstools exfatprogs btrfs-progs lvm2 mdadm cryptsetup gvfs gvfs-mtp gvfs-smb nfs-utils smartmontools && \
+    fuse2 fuse3 fuse2fs ntfs-3g exfatprogs lvm2 mdadm cryptsetup gvfs gvfs-mtp gvfs-smb nfs-utils smartmontools && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Firmware & Microcode ---
@@ -372,10 +374,8 @@ RUN systemctl enable var-opt.mount && \
     systemctl enable brew-setup.service
 
 # Bootc / Dracut Fixes
-RUN --mount=type=tmpfs,dst=/run \
-    printf "systemdsystemconfdir=/etc/systemd/system\nsystemdsystemunitdir=/usr/lib/systemd/system\n" | tee /usr/lib/dracut/dracut.conf.d/30-bootcrew-fix-bootc-module.conf && \
-    printf 'reproducible=yes\nhostonly=no\ncompress=zstd\nadd_dracutmodules+=" ostree bootc "' | tee "/usr/lib/dracut/dracut.conf.d/30-bootcrew-bootc-container-build.conf" && \
-    dracut --force "$(find /usr/lib/modules -maxdepth 1 -type d | grep -v -E '\.img$' | tail -n 1)/initramfs.img"
+RUN --mount=type=tmpfs,dst=/tmp --mount=type=tmpfs,dst=/root \
+    bash /tmp/bootcrew-shared/initramfs.sh
 
 # Preserve /opt contents for OverlayFS
 RUN mkdir -p /usr/lib/opt && \
@@ -385,12 +385,9 @@ RUN mkdir -p /usr/lib/opt && \
 
 # Final system setup and cleanup
 RUN sed -i 's|^HOME=.*|HOME=/var/home|' "/etc/default/useradd" && \
-    rm -rf /mnt /opt /boot /home /root /usr/local /srv /var /usr/lib/sysimage/log /usr/lib/sysimage/cache/pacman/pkg && \
-    mkdir -p /sysroot /boot /usr/lib/ostree /var /run /tmp && \
-    ln -s sysroot/ostree /ostree && ln -s var/roothome /root && ln -s var/srv /srv && ln -s var/opt /opt && ln -s var/mnt /mnt && ln -s var/home /home && ln -s ../var/usrlocal /usr/local && \
-    echo "$(for dir in opt home srv mnt usrlocal ; do echo "d /var/$dir 0755 root root -" ; done)" | tee -a "/usr/lib/tmpfiles.d/bootc-base-dirs.conf" && \
-    printf "d /var/roothome 0700 root root -\nd /run/media 0755 root root -" | tee -a "/usr/lib/tmpfiles.d/bootc-base-dirs.conf" && \
-    printf '[composefs]\nenabled = yes\n[sysroot]\nreadonly = true\n' | tee "/usr/lib/ostree/prepare-root.conf"
+    mkdir -p /run /tmp && \
+    bash /tmp/bootcrew-shared/bootc-rootfs.sh && \
+    rm -rf /tmp/bootcrew-shared
 
 RUN ln -sf ../usr/lib/os-release /etc/os-release
 RUN ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
@@ -399,5 +396,7 @@ RUN ln -sf /usr/share/zoneinfo/Etc/UTC /etc/localtime
 RUN mkdir -p /etc/pki/containers
 COPY cosign.pub /etc/pki/containers/bopp-os.pub
 
-    RUN rm -f /README.md
+RUN rm -f /README.md
 LABEL containers.bootc=1
+
+RUN bootc container lint
