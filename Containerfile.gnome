@@ -43,6 +43,10 @@ RUN COMPONENT_TAG="gnome-media" pacman -Sy --noconfirm --needed \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
+# Copy GNOME-specific configuration files
+COPY files/gnome/etc /etc/
+COPY files/gnome/usr /usr/
+
 # Enable DE services
 # We disable SDDM if it was enabled, and enable GDM
 RUN systemctl disable sddm.service || true && \

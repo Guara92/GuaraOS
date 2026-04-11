@@ -129,10 +129,10 @@ RUN grep "= */var" /etc/pacman.conf | sed "/= *\/var/s/.*=// ; s/ //" | xargs -n
 
 # PRE-INSTALL CONFIGURATION & HOOKS
 # Copy hooks and configs EARLY so they fire during the master pacman block.
-COPY files/usr/share /usr/share
-COPY files/etc /etc
-COPY files/usr/lib /usr/lib
-COPY files/usr/libexec /usr/libexec
+COPY files/base/usr/share /usr/share
+COPY files/base/etc /etc
+COPY files/base/usr/lib /usr/lib
+COPY files/base/usr/libexec /usr/libexec
 RUN chmod -R 0755 /usr/libexec
 
 # Disable initramfs generation during pacman transactions to save redundant build time.
@@ -326,7 +326,7 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_
 # ==========================================
 
 # Master copy of custom executables. Overwrites defaults (like steamos-update).
-COPY files/usr/bin /usr/bin
+COPY files/base/usr/bin /usr/bin
 RUN chmod -R 0755 /usr/bin /usr/share/libalpm/scripts
 
 # Install AUR packages from Stage 1
