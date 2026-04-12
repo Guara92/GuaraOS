@@ -194,13 +194,13 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_
 # --- Fonts ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="fonts" pacman -Sy --noconfirm --needed \
-    ttf-ms-fonts ttf-dejavu ttf-bitstream-vera ttf-ubuntu-font-family noto-fonts noto-fonts-cjk noto-fonts-emoji noto-color-emoji-fontconfig ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono && \
+    ttf-ms-fonts ttf-dejavu ttf-bitstream-vera ttf-ubuntu-font-family noto-fonts noto-fonts-cjk noto-fonts-emoji noto-color-emoji-fontconfig ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono awesome-terminal-fonts cantarell-fonts ttf-liberation ttf-opensans ttf-meslo-nerd && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Filesystems & Storage ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="filesystems" pacman -Sy --noconfirm --needed \
-    fuse2 fuse3 fuse2fs ntfs-3g exfatprogs lvm2 mdadm cryptsetup gvfs gvfs-mtp gvfs-smb nfs-utils smartmontools && \
+    fuse2 fuse3 fuse2fs ntfs-3g exfatprogs lvm2 mdadm cryptsetup gvfs gvfs-mtp gvfs-smb nfs-utils smartmontools nilfs-utils dmraid && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Archiving & Compression ---
@@ -212,7 +212,7 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_
 # --- Printing & Scanning ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="printing-scanning" pacman -Sy --noconfirm --needed \
-    cups cups-pdf system-config-printer sane && \
+    cups cups-pdf system-config-printer sane cups-filters foomatic-db foomatic-db-engine foomatic-db-gutenprint-ppds foomatic-db-nonfree foomatic-db-nonfree-ppds foomatic-db-ppds ghostscript gsfonts gutenprint splix hplip python-pyqt5 python-reportlab && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Audio Core ---
@@ -230,14 +230,14 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_
 # --- Networking & VPNs ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="networking" pacman -Sy --noconfirm --needed \
-    networkmanager networkmanager-openvpn wpa_supplicant iwd ethtool dnsutils modemmanager usb_modeswitch nss-mdns bluez bluez-utils bluez-libs bluez-obex bluedevil openvpn wireguard-tools pptpclient mullvad-vpn mullvad-vpn-daemon cloudflare-warp-bin tailscale && \
+    networkmanager networkmanager-openvpn wpa_supplicant iwd ethtool dnsutils modemmanager usb_modeswitch nss-mdns bluez bluez-utils bluez-libs bluez-obex bluedevil openvpn wireguard-tools pptpclient mullvad-vpn mullvad-vpn-daemon cloudflare-warp-bin tailscale dnsmasq xl2tpd bluez-hid2hci && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- CATEGORY 3: Moderate Updates ---
 # --- Power & Hardware Management ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="hardware-management" pacman -Sy --noconfirm --needed \
-    power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs mousetweaks radeontool fwupd dmemcg-booster hwinfo dmidecode hdparm lsscsi sg3_utils mtools chwd && \
+    power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs mousetweaks radeontool fwupd dmemcg-booster hwinfo dmidecode hdparm lsscsi sg3_utils mtools chwd hwdetect && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Shells & Prompts ---
@@ -249,13 +249,13 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_
 # --- CLI Utilities ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="cli-utilities" pacman -Sy --noconfirm --needed \
-    zoxide eza ripgrep tealdeer fd fzf jq btop iotop-c konsave conky sysstat htop fastfetch glances procs bottom rsync rclone wl-clipboard procps-ng curl wget file man-db man-pages openssh openssl && \
+    zoxide eza ripgrep tealdeer fd fzf jq btop iotop-c konsave conky sysstat htop fastfetch glances procs bottom rsync rclone wl-clipboard procps-ng curl wget file man-db man-pages openssh openssl pacman-contrib pkgfile plocate duf fsarchiver pv && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Text Editors & IDEs ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="text-editors-ides" pacman -Sy --noconfirm --needed \
-    nano nano-syntax-highlighting micro vi visual-studio-code-bin meld && \
+    nano nano-syntax-highlighting micro vi visual-studio-code-bin meld vim && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Development Base ---
@@ -279,7 +279,7 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_
 # --- Desktop Integration & GUI Libraries ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="desktop-integration" pacman -Sy --noconfirm --needed \
-    xdg-utils libappimage gtk3 gtk4 nss libnotify libxss libappindicator-gtk3 libsecret && \
+    xdg-utils libappimage gtk3 gtk4 nss libnotify libxss libappindicator-gtk3 libsecret libgsf libopenraw poppler-glib espeak-ng orca && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- CachyOS Base Settings ---
@@ -304,7 +304,7 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_
 # --- Media & Video ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="media-video" pacman -Sy --noconfirm --needed \
-    libdvdcss gst-libav mpv-git ffmpeg vlc gpu-screen-recorder-ui && \
+    libdvdcss gst-libav mpv-git ffmpeg vlc gpu-screen-recorder-ui ffmpegthumbnailer gst-plugin-pipewire gst-plugins-bad gst-plugins-ugly vlc-plugins-all && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Gaming Core & Hardware Utilities ---
@@ -316,13 +316,13 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_
 # --- Web Browsers ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="web-browsers" pacman -Sy --noconfirm --needed \
-    helium-browser-bin cachyos-firefox-settings && \
+    helium-browser-bin cachyos-firefox-settings firefox && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Development Languages ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=boppos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="development-languages" pacman -Sy --noconfirm --needed \
-    nodejs npm rust go python-pip python-pipx ruby php cargo-binstall cargo-update && \
+    nodejs npm rust go python-pip python-pipx ruby php cargo-binstall cargo-update python-defusedxml python-packaging && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # ==========================================

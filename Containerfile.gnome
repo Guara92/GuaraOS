@@ -11,7 +11,7 @@ FROM ghcr.io/bopp-os/cachyos-base:${BASE_IMAGE_TAG}
 
 # --- Desktop Environment (GNOME) Core ---
 RUN COMPONENT_TAG="gnome-core" pacman -Sy --noconfirm --needed \
-    gnome gnome-shell mutter gnome-session gnome-tweaks gdm xorg-xwayland \
+    gnome gnome-shell mutter gnome-session gnome-tweaks gdm xorg-xwayland gnome-control-center gnome-keyring libnma gnome-backgrounds \
     xdg-desktop-portal xdg-desktop-portal-gnome xdg-desktop-portal-gtk \
     nautilus gnome-console gnome-text-editor ptyxis && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
@@ -19,7 +19,7 @@ RUN COMPONENT_TAG="gnome-core" pacman -Sy --noconfirm --needed \
 
 # --- Essential Desktop Utilities ---
 RUN COMPONENT_TAG="gnome-utilities" pacman -Sy --noconfirm --needed \
-    file-roller extension-manager dconf-editor papers loupe gnome-disk-utility simple-scan && \
+    file-roller extension-manager dconf-editor papers loupe gnome-disk-utility simple-scan gnome-calculator gnome-power-manager gnome-nettool gnome-usage malcontent gvfs-afc gvfs-gphoto2 && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
