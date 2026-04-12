@@ -45,8 +45,8 @@ RUN COMPONENT_TAG="kde-themes-aesthetics" pacman -Sy --noconfirm --needed \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # Copy Plasma-specific configuration files
-COPY files/plasma/etc /etc/
-COPY files/plasma/usr /usr/
+# COPY files/plasma/etc /etc/
+# COPY files/plasma/usr /usr/
 
 # Enable DE services
 RUN systemctl disable sddm.service || true && \
