@@ -19,13 +19,13 @@ RUN COMPONENT_TAG="gnome-core" pacman -Sy --noconfirm --needed \
 
 # --- Essential Desktop Utilities ---
 RUN COMPONENT_TAG="gnome-utilities" pacman -Sy --noconfirm --needed \
-    file-roller extension-manager dconf-editor papers loupe gnome-disk-utility simple-scan gnome-calculator gnome-power-manager gnome-nettool gnome-usage malcontent gvfs-afc gvfs-gphoto2 && \
+    file-roller extension-manager dconf-editor papers loupe gnome-disk-utility simple-scan gnome-calculator gnome-power-manager gnome-nettool gnome-usage malcontent gvfs-afc gvfs-gphoto2 gdm-settings && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- GNOME Themes ---
 RUN COMPONENT_TAG="gnome-themes" pacman -Sy --noconfirm --needed \
-    adw-gtk-theme cachyos-nord-gtk-theme-git && \
+    adw-gtk-theme cachyos-nord-gtk-theme-git flat-remix-gnome flat-remix-gtk && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
@@ -40,6 +40,14 @@ RUN COMPONENT_TAG="gnome-extensions" pacman -Sy --noconfirm --needed \
 # --- GNOME Media ---
 RUN COMPONENT_TAG="gnome-media" pacman -Sy --noconfirm --needed \
     sushi showtime celluloid && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- GNOME Audio Processing ---
+# easyeffects: per-app EQ, compressor, limiter, reverb via PipeWire.
+# lsp-plugins: high-quality DSP plugin suite used as easyeffects presets.
+RUN COMPONENT_TAG="gnome-audio" pacman -Sy --noconfirm --needed \
+    easyeffects lsp-plugins && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 

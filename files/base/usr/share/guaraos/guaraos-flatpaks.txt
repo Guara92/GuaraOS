@@ -1,16 +1,40 @@
-net.mullvad.MullvadBrowser
-com.calibre_ebook.calibre
-it.mijorus.gearlever
-org.kde.okular
-org.inkscape.Inkscape
-org.videolan.VLC
-com.obsproject.Studio
+# GuaraOS — Optional Flatpaks
+# Install with: install-optional-flatpaks
+#
+# Curated selection for the GNOME flavor.
+# All apps are sourced from Flathub.
+# Lines starting with # are ignored by the install script.
+
+# --- Communication ---
 com.discordapp.Discord
+org.signal.Signal
+org.telegram.desktop
+org.gnome.Fractal
+
+# --- News & Reading ---
+io.gitlab.news_flash.NewsFlash
+com.calibre_ebook.calibre
+
+# --- Creativity ---
+org.inkscape.Inkscape
+com.obsproject.Studio
+
+# --- GNOME Tools ---
+com.mattjakeman.ExtensionManager
 io.github.flattool.Warehouse
 com.github.tchx84.Flatseal
+
+# --- System ---
+io.missioncenter.MissionCenter
+
+# --- Development ---
+io.podman_desktop.PodmanDesktop
+
+# --- Security ---
 com.bitwarden.desktop
+
+# --- Gaming ---
 com.vysp3r.ProtonPlus
-org.kde.gwenview
-org.kde.kcalc
-io.github.kolunmi.Bazaar
-org.jeffvli.feishin
+
+# --- Utilities ---
+it.mijorus.gearlever

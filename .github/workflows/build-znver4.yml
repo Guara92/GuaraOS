@@ -207,7 +207,7 @@ jobs:
             BUILD_ARGS+=("--build-arg" "WIPE_PKG_CACHE=true")
           fi
 
-          FLAVORS=("gnome" "gamestation")
+          FLAVORS=("gnome" "gamestation" "cosmic")
 
           for FLAVOR in "${FLAVORS[@]}"; do
             echo "::group::Building $FLAVOR"
@@ -253,7 +253,7 @@ jobs:
         run: |
           set -ex
 
-          FLAVORS=("gnome" "gamestation")
+          FLAVORS=("gnome" "gamestation" "cosmic")
 
           for FLAVOR in "${FLAVORS[@]}"; do
             echo "::group::Pushing $FLAVOR"

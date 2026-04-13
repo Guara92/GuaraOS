@@ -14,4 +14,8 @@ kargs = [
   "transparent_hugepage.defrag=defer+madvise",
   "skew_tick=1",
   "threadirqs",
+  "zswap.enabled=1",
+  "zswap.compressor=zstd",
+  "zswap.zpool=zsmalloc",
+  "zswap.shrinker_enabled=1",
 ]

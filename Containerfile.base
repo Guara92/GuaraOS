@@ -64,6 +64,13 @@ RUN --mount=type=cache,id=guaraos-builder-cache-${TARGET_CPU_MARCH},target=/var/
     cd /tmp/autofs && \
     sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
 
+# Build heroic-games-launcher-bin
+RUN --mount=type=cache,id=guaraos-builder-cache-${TARGET_CPU_MARCH},target=/var/cache/pacman/pkg \
+    git clone https://aur.archlinux.org/heroic-games-launcher-bin.git /tmp/heroic && \
+    chown -R builduser:builduser /tmp/heroic && \
+    cd /tmp/heroic && \
+    sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
+
 
 
 # Clone bootcrew/mono to access their shared setup scripts
@@ -170,7 +177,7 @@ RUN --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysi
 # MASTER PACKAGE INSTALLATION
 # ==========================================
 RUN --mount=type=tmpfs,dst=/run \
-    pacman -Rdd --noconfirm pulseaudio pulseaudio-bluetooth mesa-git lib32-mesa-git || echo "Conflicting packages not found, skipping."
+    pacman -Rdd --noconfirm pulseaudio pulseaudio-bluetooth mesa lib32-mesa || echo "Conflicting packages not found, skipping."
 
 # --- CATEGORY 1: System Core & Foundational ---
 # --- System Core ---
@@ -196,6 +203,16 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="filesystems" pacman -Sy --noconfirm --needed \
     fuse2 fuse3 fuse2fs ntfs-3g exfatprogs lvm2 mdadm cryptsetup gvfs gvfs-mtp gvfs-smb nfs-utils smartmontools nilfs-utils dmraid && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Btrfs Snapshots ---
+# snapper + btrfs-assistant: daily timeline snapshots of the mutable state
+# (/etc config changes, /var app state). /usr is read-only (bootc-managed)
+# so snapshot diffs are small. Configuration and .snapshots subvolume creation
+# are deferred to guaraos-snapper-setup.service on first boot.
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="btrfs-snapshots" pacman -Sy --noconfirm --needed \
+    snapper btrfs-assistant cachyos-snapper-support btrfsmaintenance && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Archiving & Compression ---
@@ -244,13 +261,13 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- CLI Utilities ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="cli-utilities" pacman -Sy --noconfirm --needed \
-    zoxide eza ripgrep tealdeer fd fzf jq btop iotop-c konsave conky sysstat htop fastfetch glances procs bottom rsync rclone wl-clipboard procps-ng curl wget file man-db man-pages openssh openssl pacman-contrib pkgfile plocate duf fsarchiver pv && \
+    zoxide eza ripgrep tealdeer fd fzf jq btop iotop-c konsave conky sysstat htop fastfetch glances procs bottom rsync rclone wl-clipboard procps-ng curl wget file man-db man-pages openssh openssl pacman-contrib pkgfile plocate duf fsarchiver pv bpftune-git && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Text Editors & IDEs ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="text-editors-ides" pacman -Sy --noconfirm --needed \
-    nano nano-syntax-highlighting micro vi visual-studio-code-bin meld vim && \
+    nano nano-syntax-highlighting micro vi visual-studio-code-bin meld vim helix && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Development Base ---
@@ -263,6 +280,14 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="containers" pacman -Sy --noconfirm --needed \
     docker docker-compose podman podman-compose distrobox flatpak ptyxis && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Full Virtualization Stack ---
+# QEMU/KVM + libvirt for running VMs. edk2-ovmf provides UEFI firmware.
+# swtpm adds virtual TPM support for Windows 11 VMs.
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="virtualization" pacman -Sy --noconfirm --needed \
+    qemu-full libvirt virt-install virt-viewer edk2-ovmf swtpm && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- CPU Schedulers ---
@@ -293,7 +318,7 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- Graphics & Drivers ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="graphics-drivers" pacman -Sy --noconfirm --needed \
-    mesa lib32-mesa mesa-utils vulkan-icd-loader vulkan-mesa-layers vulkan-intel vulkan-radeon intel-media-driver vulkan-nouveau lib32-vulkan-mesa-layers lib32-vulkan-intel lib32-vulkan-radeon lib32-vulkan-nouveau libdisplay-info lib32-libdisplay-info && \
+    mesa-git lib32-mesa-git mesa-utils vulkan-icd-loader vulkan-mesa-layers vulkan-intel vulkan-radeon intel-media-driver vulkan-nouveau lib32-vulkan-mesa-layers lib32-vulkan-intel lib32-vulkan-radeon lib32-vulkan-nouveau libdisplay-info lib32-libdisplay-info && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Media & Video ---
@@ -305,7 +330,7 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- Gaming Core & Hardware Utilities ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="gaming-core" pacman -Sy --noconfirm --needed \
-    cachyos-gaming-meta cachyos-gaming-applications xorg-xwininfo xdotool yad winboat proton-cachyos wine gamescope-session-git sunshine lact coolercontrol openrgb openrgb-plugin-effects-git nvtop lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid goverlay pascube vkbasalt vkbasalt-cli && \
+    cachyos-gaming-meta cachyos-gaming-applications xorg-xwininfo xdotool yad winboat proton-cachyos wine gamescope-session-git sunshine lact coolercontrol openrgb openrgb-plugin-effects-git nvtop lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid goverlay pascube vkbasalt vkbasalt-cli protonup-qt steam lutris && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Web Browsers ---
@@ -383,7 +408,22 @@ RUN systemctl enable var-opt.mount && \
     systemctl enable ananicy-cpp.service && \
     systemctl enable scx_loader.service && \
     systemctl enable brew-setup.service && \
-    systemctl enable systemd-homed.service
+    systemctl enable systemd-homed.service && \
+    systemctl enable ufw.service && \
+    systemctl enable dmemcg-booster-system.service && \
+    systemctl enable coolercontrold.service && \
+    systemctl enable fstrim.timer && \
+    systemctl enable snapper-cleanup.timer && \
+    systemctl enable snapper-timeline.timer && \
+    systemctl enable btrfs-scrub.timer && \
+    systemctl enable btrfs-balance.timer && \
+    systemctl enable libvirtd.socket && \
+    systemctl enable docker.socket && \
+    systemctl enable guaraos-swap-setup.service && \
+    systemctl enable guaraos-snapper-setup.service
+
+RUN chmod 0755 /usr/libexec/guaraos-swap-setup && \
+    chmod 0755 /usr/libexec/guaraos-snapper-setup
 
 # Bootc / Dracut Fixes
 RUN --mount=type=tmpfs,dst=/run \

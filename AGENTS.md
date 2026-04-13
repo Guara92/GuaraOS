@@ -16,7 +16,8 @@ Principles: **immutable by design · unbreakable by architecture · maximum runt
 | Image signing | cosign — Sigstore keyful, `guaraos.pub` embedded in image |
 | Package manager | pacman + CachyOS repos + Chaotic-AUR + AUR (build stage only) |
 | Task runner | just (Justfile) |
-| Display managers | GDM (gnome) · plasmalogin (gamestation) |
+| Display managers | GDM (gnome) · plasmalogin (gamestation) · cosmic-greeter (cosmic) |
+| Swap | zswap (zstd + zsmalloc + shrinker, in-RAM pool) → 32 GiB `/var/swap/swapfile` (btrfs nested subvolume, first-boot) |
 
 ---
 
@@ -27,7 +28,7 @@ Principles: **immutable by design · unbreakable by architecture · maximum runt
 | `guaraos-gnome` | `znver4` | GDM | GNOME | Daily driver — AMD Ryzen 7000+ workstation |
 | `guaraos-gamestation` | `znver4` | plasmalogin | gamescope → Plasma | Gaming rig — AMD Ryzen 7000+ |
 | `guaraos-gamestation` | `v3` | plasmalogin | gamescope → Plasma | Gaming rig — generic x86-64 |
-| `guaraos-cosmic` | `znver4` | TBD | COSMIC | **Future** — not yet implemented |
+| `guaraos-cosmic` | `znver4` | cosmic-greeter | COSMIC | COSMIC desktop — AMD Ryzen 7000+ workstation |
 
 Registry: `ghcr.io/guara92/guaraos-{flavor}:{arch}`
 
@@ -39,11 +40,12 @@ Registry: `ghcr.io/guara92/guaraos-{flavor}:{arch}`
 Containerfile.base          shared base — all flavors FROM this
 Containerfile.gnome         GNOME overlay
 Containerfile.gamestation   KDE Plasma + gamescope overlay
+Containerfile.cosmic        COSMIC desktop overlay
 guaraos.pub                 cosign public key (baked into image as /etc/pki/containers/guaraos.pub)
 Justfile                    build · push · sign · verify · switch
 scripts/sign.sh             cosign signing helper (called by Justfile)
 .github/workflows/
-  build-znver4.yml          CI: guaraos-gnome:znver4 + guaraos-gamestation:znver4
+  build-znver4.yml          CI: guaraos-gnome:znver4 + guaraos-gamestation:znver4 + guaraos-cosmic:znver4
   build-v3.yml              CI: guaraos-gamestation:v3
 files/base/                 overlay COPY'd into the base image
   etc/                      runtime-mutable /etc seeds
@@ -61,13 +63,19 @@ files/base/                 overlay COPY'd into the base image
     lib/bootc/kargs.d/
       90-guaraos-optimizations.toml   kernel args (see Kernel Args section)
     lib/systemd/system/
-      var-opt.mount         OverlayFS mount for /opt (writable on immutable system)
-      usr-share-sddm.mount  OverlayFS mount for SDDM theme dir
+      var-opt.mount                    OverlayFS mount for /opt (writable on immutable system)
+      usr-share-sddm.mount             OverlayFS mount for SDDM theme dir
+      guaraos-swap-setup.service       first-boot oneshot: creates /var/swap as btrfs subvolume + swapfile
+      guaraos-snapper-setup.service    first-boot oneshot: creates snapper root config + .snapshots subvolume
     lib/tmpfiles.d/
       guaraos-opt-overlay.conf
       guaraos-sddm-overlay.conf
     libexec/
-      assign-usercomponent.sh   tags pacman-owned files with setfattr user.component
+      assign-usercomponent.sh      tags pacman-owned files with setfattr user.component
+      guaraos-swap-setup           creates /var/swap btrfs subvolume + 32 GiB swapfile on first boot
+      guaraos-snapper-setup        creates snapper 'root' config (template: guaraos) on first boot
+    etc/snapper/
+      config-templates/guaraos     GuaraOS snapper template (daily 7-day window, 20% space limit)
     share/guaraos/
       guaraos-flatpaks.txt  curated Flatpak list for install-optional-flatpaks
     share/fish/vendor_conf.d/cachyos-guaraos.fish
@@ -92,7 +100,7 @@ files/gamestation/          overlay COPY'd into the gamestation image (on top of
 ```
 Stage 1: aur_builder  (cachyos-{arch})
   - Initialises pacman keyring + CachyOS + Chaotic-AUR repos
-  - Builds AUR packages: scopebuddy-git, autofs
+  - Builds AUR packages: scopebuddy-git, autofs, heroic-games-launcher-bin
   - Clones bootcrew/mono (shared bootc setup scripts)
 
 Stage 2: brew  (ghcr.io/ublue-os/brew:latest)
@@ -107,7 +115,7 @@ Stage 3: system  (cachyos-{arch})   ← final image
   - Runs bootc container lint
 ```
 
-Flavor overlays (`Containerfile.gnome`, `Containerfile.gamestation`) are:
+Flavor overlays (`Containerfile.gnome`, `Containerfile.gamestation`, `Containerfile.cosmic`) are:
 ```
 FROM ghcr.io/guara92/guaraos-base:{arch}
   → install DE packages
@@ -139,10 +147,16 @@ FROM ghcr.io/guara92/guaraos-base:{arch}
 - **Kernel args + sysctl** (see below): mitigations off, AMD P-state active, full preemption, IOMMU passthrough, THP madvise, threaded IRQs, Zen 4 NUMA tuning, BBR networking
 - **ananicy-cpp**: `ananicy-cpp.service` enabled — automatic process priority management
 - **dmemcg-booster**: enabled for memory cgroup performance
+- **zswap**: enabled via kargs (`zstd` compressor, `zsmalloc` pool, shrinker enabled) — compressed in-RAM swap cache; backed by a 32 GiB `/var/swap/swapfile` on first boot. `/var/swap` is created as a dedicated **btrfs nested subvolume** by `guaraos-swap-setup.service` — this is required because the kernel refuses to activate a btrfs swapfile if its containing subvolume has writable snapshots; a nested subvolume is excluded from parent (`@`) snapshots. `vm.swappiness=40` — moderate pressure to push anonymous pages into the pool, keeps hot game/app data resident in RAM; lower than zram-tuned 100, higher than pure-disk-swap 10.
+- **snapper**: daily timeline snapshots (7-day rolling window) of the mutable state — `/etc` config changes and `/var` app state. `/usr` is read-only (bootc-managed), so snapshot diffs are small. First-boot `guaraos-snapper-setup.service` creates the snapper `root` config using the `guaraos` template and the `.snapshots` nested subvolume. `btrfs-assistant` provides the GUI.
 
 ### 4. Performance — Kernel Arguments
 Declared in `files/base/usr/lib/bootc/kargs.d/90-guaraos-optimizations.toml`:
 ```
+zswap.enabled=1              enable zswap compressed swap cache
+zswap.compressor=zstd        zstd compression (best ratio/speed tradeoff)
+zswap.zpool=zsmalloc         zsmalloc pool allocator (lower fragmentation than zbud)
+zswap.shrinker_enabled=1     proactively decompress pool pages back to RAM when RAM is free (Linux 6.8+)
 amd_pstate=active            AMD CPU P-state driver (better freq scaling)
 amdgpu.ppfeaturemask=0xffffffff  unlock all AMDGPU power features
 split_lock_detect=off        eliminate split-lock detection overhead
@@ -206,14 +220,20 @@ Beyond the autologin mechanism, the gamestation image ships additional performan
 | CPU scheduler | `scx-scheds-git` `scx-tools-git` `scx-manager` |
 | Bootc | `bootc` `dracut` `ostree` `skopeo` `containers-common` |
 | User management | `systemd-homed` `pam_systemd_home.so` |
-| Gaming | `cachyos-gaming-meta` `cachyos-gaming-applications` `gamescope-session-git` `proton-cachyos` `wine` `mangohud` `goverlay` `lact` `coolercontrol` `openrgb` `sunshine` `waydroid` |
-| Graphics | `mesa` `lib32-mesa` `vulkan-radeon` `vulkan-intel` `vulkan-nouveau` + lib32 variants |
+| Gaming | `cachyos-gaming-meta` `cachyos-gaming-applications` `gamescope-session-git` `proton-cachyos` `wine` `steam` `lutris` `mangohud` `goverlay` `lact` `coolercontrol` `openrgb` `sunshine` `waydroid` `protonup-qt` |
+| Graphics | `mesa-git` `lib32-mesa-git` `vulkan-radeon` `vulkan-intel` `vulkan-nouveau` + lib32 variants |
 | Containers | `docker` `docker-compose` `podman` `podman-compose` `distrobox` `flatpak` |
+| Virtualization | `qemu-full` `libvirt` `virt-install` `virt-viewer` `edk2-ovmf` `swtpm` |
+| Performance | `bpftune-git` `dmemcg-booster` `ananicy-cpp` `scx_loader` |
+| Swap | zswap via kargs · `guaraos-swap-setup.service` (first-boot: `/var/swap` btrfs subvolume + 32 GiB swapfile) |
+| Btrfs snapshots | `snapper` `btrfs-assistant` `cachyos-snapper-support` `btrfsmaintenance` · `guaraos-snapper-setup.service` (first-boot config) · `snapper-timeline.timer` (daily 7-day window) · `btrfs-scrub.timer` + `btrfs-balance.timer` (monthly, idle priority) |
 | Dev languages | `nodejs` `npm` `rust` `go` `python-pip` `python-pipx` `ruby` `cargo-binstall` |
 | Dev tools | `base-devel` `git` `git-lfs` `github-cli` `paru` `just` `cosign` `visual-studio-code-bin` |
+| Text editors | `vim` `helix` `micro` `nano` `visual-studio-code-bin` |
 | Shell | `zoxide` `eza` `starship` `atuin` `fzf` `ripgrep` `fd` `btop` `fastfetch` |
 | Brew | via `ublue-os/brew` + `brew-setup.service` |
-| AUR (built) | `scopebuddy-git` `autofs` |
+| AUR (built) | `scopebuddy-git` `autofs` `heroic-games-launcher-bin` |
+| GNOME extras | `easyeffects` `lsp-plugins` `gdm-settings` `flat-remix-gnome` `flat-remix-gtk` |
 
 ---
 
@@ -240,6 +260,7 @@ Beyond the autologin mechanism, the gamestation image ships additional performan
 just build znver4 base
 just build znver4 gnome
 just build znver4 gamestation
+just build znver4 cosmic
 
 just build v3 base
 just build v3 gamestation
@@ -251,6 +272,7 @@ just verify v3
 # Rebase running system to a local build
 just switch znver4 gnome
 just switch znver4 gamestation
+just switch znver4 cosmic
 ```
 
 ---
@@ -259,7 +281,7 @@ just switch znver4 gamestation
 
 | Workflow | Runner requirement | Images built |
 |---|---|---|
-| `build-znver4.yml` | Self-hosted, AVX-512 / znver4 | `guaraos-base:znver4` `guaraos-gnome:znver4` `guaraos-gamestation:znver4` |
+| `build-znver4.yml` | Self-hosted, AVX-512 / znver4 | `guaraos-base:znver4` `guaraos-gnome:znver4` `guaraos-gamestation:znver4` `guaraos-cosmic:znver4` |
 | `build-v3.yml` | Self-hosted, AVX2 | `guaraos-base:v3` `guaraos-gamestation:v3` |
 
 Both workflows:
@@ -280,6 +302,7 @@ Triggers: `schedule` (every 2 days) + `workflow_dispatch`. `build-v3.yml` also t
 - **Never re-enable initramfs hooks** (`90-mkinitcpio-install.hook`, `90-dracut-install.hook`). They are intentionally null-linked. Dracut runs once explicitly at the end of `Containerfile.base`.
 - **Never add SDDM** to the gamestation image. The display manager is `plasmalogin`.
 - **Never add plasmalogin** to the gnome image. The display manager is GDM.
+- **Never add GDM or plasmalogin** to the cosmic image. The display manager is `cosmic-greeter`.
 - **Never remove `bootc container lint`** from `Containerfile.base`. It is the final validation gate.
 - **Never push to the git remote.** All remote operations are handled by CI.
 - **Never remove the `cosign.pub → guaraos.pub` COPY** from `Containerfile.base`. It is what makes `bootc upgrade` trust signed updates.
@@ -287,6 +310,11 @@ Triggers: `schedule` (every 2 days) + `workflow_dispatch`. `build-v3.yml` also t
 - **Never skip the `if [ -e /usr/etc ]` cleanup block** after pacman installs. CachyOS packages occasionally write stale `/usr/etc` files that break `bootc`.
 - **Never disable `systemd-homed.service`** in the base image. User accounts depend on it.
 - **Never add LUKS or TPM2 kernel arguments** (`rd.luks.options=tpm2-device=auto`). GuaraOS machines are trusted desktops with no disk encryption.
+- **Never write the swapfile to `/usr`**. `/var/swap/swapfile` is the correct path — `/var` is persistent across upgrades. The file is created at runtime by `guaraos-swap-setup.service`, not baked into the image.
+- **Never enable zram**. GuaraOS uses zswap + disk swapfile. zram and zswap are mutually exclusive swap compression strategies; enabling both wastes RAM.
+- **Never create `/var/swap` as a plain directory on btrfs**. It must be a dedicated nested btrfs subvolume (created by `guaraos-swap-setup`). A btrfs swapfile in a subvolume that has writable snapshots causes `swapon` to fail on every boot after the first snapper run.
+- **Never snapshot the `@` root subvolume with a snapper config that targets a subvolume containing the swapfile**. The swapfile lives in its own `@/var/swap` nested subvolume, which is automatically excluded from parent snapshots.
+- **Never remove `guaraos-snapper-setup.service`** without also removing snapper entirely. Without it, no `.snapshots` subvolume is created and snapper-timeline.timer will error on every boot.
 
 ---
 
@@ -298,4 +326,5 @@ Triggers: `schedule` (every 2 days) + `workflow_dispatch`. `build-v3.yml` also t
 4. Add `{flavor}` to the `FLAVORS` array in the `verify` recipe in `Justfile`.
 5. Document the new target in `README.md`.
 
-Planned future flavors: `guaraos-cosmic` (COSMIC desktop, znver4).
+Implemented flavors: `guaraos-gnome`, `guaraos-gamestation`, `guaraos-cosmic`.
+No further flavors are currently planned. Hyprland or a minimal variant may be considered in future.
