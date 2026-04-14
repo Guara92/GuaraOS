@@ -63,6 +63,7 @@ RUN systemctl disable sddm.service || true && \
 
 # Preserve /opt contents for OverlayFS
 # (visual-studio-code-bin and others install here)
-RUN if [ -d /var/opt ] && [ "$(ls -A /var/opt)" ]; then \
-        mkdir -p /usr/lib/opt && cp -r /var/opt/* /usr/lib/opt/ && rm -rf /var/opt/* ; \
+RUN mkdir -p /usr/lib/opt && \
+    if [ -d /opt ] && [ "$(ls -A /opt)" ]; then \
+        mv /opt/* /usr/lib/opt/ || true; \
     fi

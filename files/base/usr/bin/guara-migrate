@@ -140,7 +140,9 @@ section "[1/5] System backup & Arch config reset"
 
 # 1.1 Backup /etc
 mkdir -p "${BACKUP_DIR}"
-tar -czf "${BACKUP_DIR}/etc_pre_migration_${TIMESTAMP}.tar.gz" /etc 2>/dev/null || true
+if ! tar -czf "${BACKUP_DIR}/etc_pre_migration_${TIMESTAMP}.tar.gz" /etc; then
+    die "Failed to create /etc backup in ${BACKUP_DIR} — check disk space. Aborting migration."
+fi
 ok "/etc backed up to ${BACKUP_DIR}/"
 
 # 1.2 Restore pristine Arch PAM & NSS from the image's /usr/etc.
@@ -210,11 +212,13 @@ fi
 #     homed users are resolved via nss-systemd and must NOT have a /etc/passwd entry.
 #     Traditional shadow users have entries in /etc/passwd; homed users do not.
 if grep -q "^${REAL_USER}:" /etc/passwd 2>/dev/null; then
-    # Preserve the UID for reference but remove the entry
     OLD_UID=$(id -u "${REAL_USER}" 2>/dev/null || echo "unknown")
+    OLD_GID=$(getent group "${REAL_USER}" 2>/dev/null | cut -d: -f3 || echo "unknown")
     sed -i "/^${REAL_USER}:/d" /etc/passwd
     sed -i "/^${REAL_USER}:/d" /etc/shadow 2>/dev/null || true
-    ok "Removed stale /etc/passwd entry for '${REAL_USER}' (old UID was ${OLD_UID})"
+    sed -i "/^${REAL_USER}:/d" /etc/group 2>/dev/null || true
+    sed -i "/^${REAL_USER}:/d" /etc/gshadow 2>/dev/null || true
+    ok "Removed stale /etc entries for '${REAL_USER}' (old UID: ${OLD_UID}, old GID: ${OLD_GID})"
 fi
 
 # 2.4 Ensure standard system groups exist for membership resolution.
@@ -242,6 +246,23 @@ if [[ -z "$OLD_HOME" ]]; then
     info "No old home directory found — skipping data migration."
     info "The new homed home has been seeded from /etc/skel."
 else
+    # Stage OLD_HOME if it would be hidden by the homed activation mount.
+    # homectl activate mounts the new home at /home/${REAL_USER}, which would
+    # shadow any existing directory at that exact path.
+    STAGED_HOME=""
+    if [[ "${OLD_HOME}" == "/home/${REAL_USER}" ]]; then
+        info "Old home is at /home/${REAL_USER} — bind-mounting to a stable path to prevent mount collision..."
+        STAGED_HOME="/var/tmp/guaraos_migrate_${REAL_USER}_${TIMESTAMP}"
+        mkdir -p "${STAGED_HOME}"
+        if mount --bind "${OLD_HOME}" "${STAGED_HOME}"; then
+            OLD_HOME="${STAGED_HOME}"
+            info "Staged old home at ${STAGED_HOME}"
+        else
+            warn "Could not bind-mount old home — collision risk if activation mounts at /home/${REAL_USER}."
+            STAGED_HOME=""
+        fi
+    fi
+
     # 4.1 Activate the new homed home so we can write into it.
     #     homectl activate mounts the home at /home/${REAL_USER}.
     if ! homectl inspect "${REAL_USER}" | grep -q 'State: active'; then
@@ -289,6 +310,12 @@ else
         else
             info "Data migration skipped. Copy manually from ${OLD_HOME} after login."
         fi
+    fi
+
+    # Clean up the bind mount if we staged the old home.
+    if [[ -n "${STAGED_HOME}" ]]; then
+        umount "${STAGED_HOME}" 2>/dev/null || true
+        rmdir "${STAGED_HOME}" 2>/dev/null || true
     fi
 fi
 

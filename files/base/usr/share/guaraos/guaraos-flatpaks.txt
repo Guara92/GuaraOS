@@ -1,5 +1,5 @@
 # GuaraOS — Optional Flatpaks
-# Install with: guara-install-flatpaks (alias for install-optional-flatpaks)
+# Install with: guara-install-flatpaks
 #
 # Curated selection for the GNOME flavor.
 # All apps are sourced from Flathub.

@@ -98,13 +98,20 @@ RAM
 `vm.swappiness=40` — the kernel prefers evicting file cache (cheap, NVMe re-read) over compressing app/game memory; the pool is used only under genuine pressure.
 
 On first boot, `guaraos-swap-setup.service`:
-1. Creates `/var/swap` as a **dedicated btrfs nested subvolume** (required: the kernel refuses to activate a btrfs swapfile if its containing subvolume has snapshots; isolating `/var/swap` in its own subvolume keeps it snapshot-free)
-2. Creates the 32 GiB swapfile inside it via `btrfs filesystem mkswapfile` (NOCOW + pre-allocation + mkswap in one step)
-3. Activates swap and writes the `/etc/fstab` entry for persistence
+1. Creates `/var/swap` as a **dedicated btrfs nested subvolume** — this is required by two complementary kernel restrictions: (a) a subvolume containing an **active** swapfile cannot be snapshotted, and (b) a swapfile that has been snapshotted cannot be activated. By isolating the swapfile in its own nested subvolume, snapper only ever snapshots `@` — nested subvolumes appear as empty directories in `@` snapshots and are never themselves snapshotted. Neither restriction is ever triggered.
+2. Creates the 32 GiB swapfile inside it via `btrfs filesystem mkswapfile --uuid clear` (NOCOW + contiguous pre-allocation + null UUID + mkswap in one step — requires btrfs-progs ≥ 6.1)
+3. Activates swap with `pri=10` and writes the `/etc/fstab` entry for persistence
+
+> **Prerequisite:** btrfs swapfiles require a **single-device filesystem** with a **single data profile**. This is the default for any system installed on one drive. RAID configurations (raid1, raid10, etc.) are not supported.
 
 `/var` is persistent across `bootc upgrade` — the subvolume and swapfile are created once and never touched again.
 
-> **Hibernation:** the swapfile must be ≥ your RAM. Adjust size and update `/etc/fstab` + kernel `resume_offset` after first boot if you need it.
+> **Hibernation:** the swapfile must be ≥ your RAM. After first boot, get the correct resume offset with:
+> ```bash
+> sudo btrfs inspect-internal map-swapfile -r /var/swap/swapfile
+> ```
+> Then set the kernel parameters `resume=UUID=<your-btrfs-uuid>` and `resume_offset=<value>` (e.g. via `bootctl set-oneshot` or a kargs drop-in).
+> ⚠️ Do **not** use `filefrag` to get this value — on btrfs it returns the logical offset, not the device-physical offset the kernel needs. `btrfs inspect-internal map-swapfile` returns the correct device-physical offset already divided by page size.
 
 ### Btrfs Snapshots
 

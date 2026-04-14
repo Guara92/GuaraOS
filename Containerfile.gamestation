@@ -72,6 +72,7 @@ RUN systemctl disable sddm.service || true && \
     systemctl enable guaraos-gamestation-setup.service
 
 # Preserve /opt contents for OverlayFS
-RUN if [ -d /var/opt ] && [ "$(ls -A /var/opt)" ]; then \
-        mkdir -p /usr/lib/opt && cp -r /var/opt/* /usr/lib/opt/ && rm -rf /var/opt/* ; \
+RUN mkdir -p /usr/lib/opt && \
+    if [ -d /opt ] && [ "$(ls -A /opt)" ]; then \
+        mv /opt/* /usr/lib/opt/ || true; \
     fi

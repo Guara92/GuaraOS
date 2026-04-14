@@ -56,7 +56,7 @@ if [ "${FS_TYPE}" = "btrfs" ]; then
     #   - mkswap header
     # Requires btrfs-progs >= 6.1 (ships in the base image).
     echo "guaraos-swap-setup: Using btrfs filesystem mkswapfile..."
-    btrfs filesystem mkswapfile --size "${SWAP_SIZE}" "${SWAP_FILE}"
+    btrfs filesystem mkswapfile --size "${SWAP_SIZE}" --uuid clear "${SWAP_FILE}"
 else
     # ext4 / xfs / f2fs — fallocate is safe and fast.
     mkdir -p "${SWAP_DIR}"
