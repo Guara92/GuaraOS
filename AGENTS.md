@@ -59,7 +59,8 @@ files/base/                 overlay COPY'd into the base image
     bin/                    user-facing scripts
       guara-migrate         migrate from Bazzite/Fedora to GuaraOS using systemd-homed
       guaraos-update        orchestrate bootc + fwupd + flatpak + brew + distrobox updates
-      install-optional-flatpaks
+      guara-install-flatpaks    install Flatpaks from curated list + Bazzite-DX upstream
+      install-optional-flatpaks (compat wrapper → guara-install-flatpaks)
     lib/bootc/kargs.d/
       90-guaraos-optimizations.toml   kernel args (see Kernel Args section)
     lib/systemd/system/
@@ -77,7 +78,7 @@ files/base/                 overlay COPY'd into the base image
     etc/snapper/
       config-templates/guaraos     GuaraOS snapper template (daily 7-day window, 20% space limit)
     share/guaraos/
-      guaraos-flatpaks.txt  curated Flatpak list for install-optional-flatpaks
+      guaraos-flatpaks.txt  curated Flatpak list for guara-install-flatpaks
     share/fish/vendor_conf.d/cachyos-guaraos.fish
 files/gamestation/          overlay COPY'd into the gamestation image (on top of base)
   usr/lib/plasmalogin/

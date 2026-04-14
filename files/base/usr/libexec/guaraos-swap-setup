@@ -25,6 +25,27 @@ SWAP_SIZE="32g"
 if [ -f "${SWAP_FILE}" ]; then
     echo "guaraos-swap-setup: ${SWAP_FILE} already exists — ensuring activation and persistence..."
 
+    # On btrfs, verify SWAP_DIR is a dedicated subvolume before activating.
+    # A swapfile inside a plain btrfs directory can be snapshotted by snapper,
+    # which permanently blocks swapon. Fail loudly so the operator can remediate.
+    FS_TYPE=$(findmnt -n -o FSTYPE --target /var 2>/dev/null || echo "unknown")
+    if [ "${FS_TYPE}" = "btrfs" ]; then
+        if ! btrfs subvolume show "${SWAP_DIR}" &>/dev/null; then
+            echo "guaraos-swap-setup: ERROR: ${SWAP_DIR} is NOT a btrfs subvolume." >&2
+            echo "guaraos-swap-setup: Activating a swapfile in a plain btrfs directory is unsafe:" >&2
+            echo "guaraos-swap-setup: snapper may snapshot it, permanently blocking future swapon." >&2
+            echo "guaraos-swap-setup: Manual remediation required:" >&2
+            echo "guaraos-swap-setup:   1. swapoff ${SWAP_FILE}  (if currently active)" >&2
+            echo "guaraos-swap-setup:   2. cp ${SWAP_FILE} /tmp/swapfile.bak" >&2
+            echo "guaraos-swap-setup:   3. rm -rf ${SWAP_DIR}" >&2
+            echo "guaraos-swap-setup:   4. btrfs subvolume create ${SWAP_DIR}" >&2
+            echo "guaraos-swap-setup:   5. btrfs filesystem mkswapfile --size 32g --uuid clear ${SWAP_FILE}" >&2
+            echo "guaraos-swap-setup:   6. swapon --priority 10 ${SWAP_FILE}" >&2
+            exit 1
+        fi
+        echo "guaraos-swap-setup: ${SWAP_DIR} is a btrfs subvolume — OK."
+    fi
+
     # Re-activate if not currently swapped in (e.g. crash between mkswapfile and swapon).
     if ! swapon --show | grep -qF "${SWAP_FILE}"; then
         echo "guaraos-swap-setup: Swap not active — activating..."

@@ -149,21 +149,26 @@ if ! tar -czf "${BACKUP_DIR}/etc_pre_migration_${TIMESTAMP}.tar.gz" /etc; then
 fi
 ok "/etc backed up to ${BACKUP_DIR}/"
 
-# 1.2 Restore pristine Arch PAM & NSS from the image's /usr/etc.
-#     This replaces any Fedora-era PAM stacks and crucially installs the
-#     Arch systemd PAM configs which include pam_systemd_home.so hooks.
-if [[ -d /usr/etc/pam.d ]]; then
-    cp -af /usr/etc/pam.d/* /etc/pam.d/
-    ok "Restored Arch-native PAM stack (includes pam_systemd_home.so)"
+# 1.2 Restore pristine GuaraOS PAM & NSS from the image's preserved config path.
+#     /usr/etc is cleaned up during the image build (bootc lint requirement).
+#     The Containerfile captures the final settled state of /etc/pam.d and
+#     /etc/nsswitch.conf into /usr/share/guaraos/pristine/etc/ before finalising.
+#     On a post-bootc-switch system /etc still carries the old Fedora/Bazzite
+#     configs — this step replaces them with the GuaraOS-native versions.
+PRISTINE_ETC="/usr/share/guaraos/pristine/etc"
+
+if [[ -d "${PRISTINE_ETC}/pam.d" ]]; then
+    cp -af "${PRISTINE_ETC}/pam.d/"* /etc/pam.d/
+    ok "Restored Arch-native PAM stack from ${PRISTINE_ETC}/pam.d (includes pam_systemd_home.so)"
 else
-    warn "/usr/etc/pam.d not found — skipping PAM restore. Verify manually."
+    warn "${PRISTINE_ETC}/pam.d not found — skipping PAM restore. Verify manually."
 fi
 
-if [[ -f /usr/etc/nsswitch.conf ]]; then
-    cp -af /usr/etc/nsswitch.conf /etc/nsswitch.conf
-    ok "Restored Arch nsswitch.conf"
+if [[ -f "${PRISTINE_ETC}/nsswitch.conf" ]]; then
+    cp -af "${PRISTINE_ETC}/nsswitch.conf" /etc/nsswitch.conf
+    ok "Restored Arch nsswitch.conf from ${PRISTINE_ETC}"
 else
-    warn "/usr/etc/nsswitch.conf not found — skipping."
+    warn "${PRISTINE_ETC}/nsswitch.conf not found — skipping."
 fi
 
 # 1.3 Ensure nsswitch.conf has 'systemd' for passwd/group lookups.

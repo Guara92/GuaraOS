@@ -71,8 +71,6 @@ RUN --mount=type=cache,id=guaraos-builder-cache-${TARGET_CPU_MARCH},target=/var/
     cd /tmp/heroic && \
     sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
 
-
-
 # Clone bootcrew/mono to access their shared setup scripts
 RUN git clone https://github.com/bootcrew/mono.git /tmp/bootcrew-mono
 
@@ -413,6 +411,15 @@ RUN --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysi
         if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && \
         rm -rf /usr/etc; \
     fi
+
+# Preserve pristine GuaraOS PAM + NSS configs for guara-migrate.
+# /usr/etc is cleaned up after every pacman RUN to satisfy bootc container lint.
+# We capture the final settled state of /etc/pam.d and /etc/nsswitch.conf into
+# a stable read-only path under /usr so guara-migrate can restore them on a
+# post-bootc-switch system where /etc still carries old Fedora/Bazzite configs.
+RUN mkdir -p /usr/share/guaraos/pristine/etc && \
+    cp -af /etc/pam.d /usr/share/guaraos/pristine/etc/pam.d && \
+    cp -af /etc/nsswitch.conf /usr/share/guaraos/pristine/etc/nsswitch.conf
 
 # Configure Flatpak
 RUN flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
