@@ -245,15 +245,20 @@ else
     # 4.1 Activate the new homed home so we can write into it.
     #     homectl activate mounts the home at /home/${REAL_USER}.
     if ! homectl inspect "${REAL_USER}" | grep -q 'State: active'; then
-        homectl activate "${REAL_USER}" || {
-            warn "Could not activate homed home. You may need to log in as ${REAL_USER} first."
-            warn "Re-run this script or manually copy from ${OLD_HOME} after first login."
-        }
+        if ! homectl activate "${REAL_USER}"; then
+            warn "Could not activate homed home — ${REAL_USER} may need to log in interactively first."
+            warn "Re-run this script after first login, or copy from ${OLD_HOME} manually."
+        fi
     fi
 
     NEW_HOME="/home/${REAL_USER}"
 
-    if [[ -d "$NEW_HOME" ]]; then
+    # Explicitly verify the home is mounted and accessible before attempting migration.
+    # This catches the case where homectl activate returned 0 but the mount is not yet ready.
+    if ! test -d "${NEW_HOME}" || ! mountpoint -q "${NEW_HOME}" 2>/dev/null; then
+        warn "Homed home '${NEW_HOME}' is not accessible (not mounted)."
+        warn "Log in interactively as '${REAL_USER}' to activate it, then re-run: sudo guara-migrate"
+    else
         echo
         echo "  Source : ${OLD_HOME}"
         echo "  Target : ${NEW_HOME}"
@@ -284,9 +289,6 @@ else
         else
             info "Data migration skipped. Copy manually from ${OLD_HOME} after login."
         fi
-    else
-        warn "New homed home at ${NEW_HOME} not accessible yet."
-        warn "Log in as ${REAL_USER} to activate it, then copy from ${OLD_HOME} manually."
     fi
 fi
 

@@ -116,6 +116,7 @@ Stage 3: system  (cachyos-{arch})   ← final image
 ```
 
 Flavor overlays (`Containerfile.gnome`, `Containerfile.gamestation`, `Containerfile.cosmic`) are:
+
 ```text
 FROM ghcr.io/guara92/guaraos-base:{arch}
   → install DE packages
@@ -128,12 +129,14 @@ FROM ghcr.io/guara92/guaraos-base:{arch}
 ## Core Principles — INVIOLABLE
 
 ### 1. Immutable by Design
+
 - `/usr` is **read-only at runtime**. The only way to change it is to rebuild and push a new image, then `bootc upgrade`.
 - `/etc` is a writable mutable overlay (ostree). Ship seeds in `files/*/etc/`; first-boot services write runtime config here.
 - `/var` is writable and persistent across upgrades. User data lives here.
 - `/opt` is provided via OverlayFS (`var-opt.mount`): lower=`/usr/lib/opt`, upper=`/var/opt_overlay/upper`.
 
 ### 2. Unbreakable by Architecture
+
 - Every update is a complete atomic image swap. No partial states.
 - `bootc` maintains staged + active deployments. Bad update → `bootc rollback`.
 - All images are cosign-signed and verified by the embedded `guaraos.pub` policy before `bootc upgrade` applies them.
@@ -141,6 +144,7 @@ FROM ghcr.io/guara92/guaraos-base:{arch}
 - Initramfs hooks (`mkinitcpio`, `dracut-install`) are **null-linked** during the build to prevent redundant generation. Dracut is called explicitly once at the end.
 
 ### 3. Maximum Runtime Performance
+
 - **Kernel**: `linux-cachyos` — CachyOS performance-patched kernel (BORE scheduler, MGLRU, THP, etc.)
 - **CPU scheduler**: `scx_loader.service` enabled — SCX userspace schedulers (`scx-scheds-git`, `scx-tools-git`, `scx-manager`) for latency-optimal scheduling on modern CPUs
 - **znver4 arch**: packages reinstalled from CachyOS znver4 repos at build time → native Zen 4/5 instruction set, no x86-64-v3 ceiling
@@ -151,7 +155,9 @@ FROM ghcr.io/guara92/guaraos-base:{arch}
 - **snapper**: daily timeline snapshots (7-day rolling window) of the mutable state — `/etc` config changes and `/var` app state. `/usr` is read-only (bootc-managed), so snapshot diffs are small. First-boot `guaraos-snapper-setup.service` creates the snapper `root` config using the `guaraos` template and the `.snapshots` nested subvolume. `btrfs-assistant` provides the GUI.
 
 ### 4. Performance — Kernel Arguments
+
 Declared in `files/base/usr/lib/bootc/kargs.d/90-guaraos-optimizations.toml`:
+
 ```toml
 zswap.enabled=1              enable zswap compressed swap cache
 zswap.compressor=zstd        zstd compression (best ratio/speed tradeoff)
@@ -327,4 +333,4 @@ Triggers: `schedule` (every 2 days) + `workflow_dispatch`. `build-v3.yml` also t
 5. Document the new target in `README.md`.
 
 Implemented flavors: `guaraos-gnome`, `guaraos-gamestation`, `guaraos-cosmic`.
-No further flavors are currently planned. Hyprland or a minimal variant may be considered in future.
+No further flavors are currently planned. Hyprland or a minimal variant may be considered in the future.
