@@ -70,6 +70,35 @@ RUN COMPONENT_TAG="gnome-extensions" pacman -Sy --noconfirm --needed \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
+# --- Pop Shell (System76 tiling extension) ---
+# Cloned from HEAD of the default branch at image build time; no Pacman
+# package exists for this extension in the CachyOS/Arch repos.
+#
+# jq patches metadata.json to declare compatibility with GNOME 40-50 so
+# the extension loads regardless of the exact shell version in this image.
+#
+# glib-compile-schemas runs twice:
+#   1. To register pop-shell's own GSettings schema (keybindings, gaps, …).
+#   2. After writing the gschema override that default-enables the extension,
+#      so the compiled gschemas.compiled reflects the new default immediately.
+#
+# typescript provides `tsc`, required by the TypeScript→GJS transpile step.
+# It is a dependency of typescript-language-server anyway so it is kept.
+RUN pacman -Sy --noconfirm --needed typescript && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    git clone --depth=1 https://github.com/pop-os/shell.git /tmp/pop-shell && \
+    cd /tmp/pop-shell && \
+    jq '.["shell-version"] = ["40","41","42","43","44","45","46","47","48","49","50"]' \
+        metadata.json > metadata.json.tmp && mv metadata.json.tmp metadata.json && \
+    make all && \
+    make install DESTDIR=/ && \
+    glib-compile-schemas /usr/share/glib-2.0/schemas/ && \
+    printf "[org.gnome.shell]\nenabled-extensions=['pop-shell@system76.com', 'dash-to-dock@micxgx.gmail.com']\n" \
+        > /usr/share/glib-2.0/schemas/zz_guaraos-pop-shell.gschema.override && \
+    glib-compile-schemas /usr/share/glib-2.0/schemas/ && \
+    rm -rf /tmp/pop-shell && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
 # --- GNOME Media ---
 RUN COMPONENT_TAG="gnome-media" pacman -Sy --noconfirm --needed \
     sushi showtime celluloid && \
