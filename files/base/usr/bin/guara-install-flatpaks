@@ -12,7 +12,8 @@ echo "=========================================="
 BAZZITE_URL="https://raw.githubusercontent.com/ublue-os/bazzite-dx/refs/heads/main/system_files/etc/ublue-os/system_flatpaks"
 GUARAOS_LIST="/usr/share/guaraos/guaraos-flatpaks.txt"
 TMP_LIST=$(mktemp /tmp/guaraos_flatpaks.XXXXXX)
-trap 'rm -f "$TMP_LIST"' EXIT
+TMP_FETCH=$(mktemp /tmp/guaraos_fetch.XXXXXX)
+trap 'rm -f "$TMP_LIST" "$TMP_FETCH"' EXIT
 
 echo "[*] Loading curated GuaraOS Flatpak list..."
 if [ -f "$GUARAOS_LIST" ]; then
@@ -27,7 +28,9 @@ echo "[*] Fetching additional Flatpaks from Bazzite-DX (non-fatal)..."
 if curl --fail --show-error --silent \
     --connect-timeout 30 --max-time 120 \
     --retry 3 --retry-connrefused \
-    "$BAZZITE_URL" | awk '{ sub(/#.*/, ""); if ($0 ~ /[^[:space:]]/) print }' >> "$TMP_LIST"; then
+    "$BAZZITE_URL" | awk '{ sub(/#.*/, ""); if ($0 ~ /[^[:space:]]/) print }' > "$TMP_FETCH" \
+    && [ -s "$TMP_FETCH" ]; then
+    cat "$TMP_FETCH" >> "$TMP_LIST"
     echo "[*] Merged upstream Bazzite-DX list."
 else
     echo "[!] Warning: Could not fetch Bazzite-DX list (network error or URL changed). Proceeding with local list only."

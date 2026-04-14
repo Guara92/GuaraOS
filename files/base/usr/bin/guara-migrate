@@ -42,7 +42,11 @@ BACKUP_DIR="/var/roothome/migration_backups"
 # After a bootc switch, /var is preserved so the data is still there.
 OLD_HOME=""
 for candidate in "/var/home/${REAL_USER}" "/home/${REAL_USER}"; do
-    if [[ -d "$candidate" ]]; then
+    resolved="$(readlink -f "$candidate" 2>/dev/null || true)"
+    if [[ -d "${resolved:-}" ]]; then
+        OLD_HOME="${resolved}"
+        break
+    elif [[ -d "$candidate" ]]; then
         OLD_HOME="$candidate"
         break
     fi
@@ -231,8 +235,12 @@ ok "systemd-sysusers ran — system accounts verified"
 section "[3/5] Cleaning up stale OverlayFS state"
 
 if [[ -d "/var/opt_overlay/work" ]]; then
-    rm -rf /var/opt_overlay/work/*
-    ok "Cleared /var/opt_overlay/work"
+    if systemctl is-active --quiet var-opt.mount 2>/dev/null; then
+        info "var-opt.mount is active — skipping /var/opt_overlay/work cleanup to avoid corrupting live OverlayFS."
+    else
+        rm -rf /var/opt_overlay/work/*
+        ok "Cleared /var/opt_overlay/work"
+    fi
 else
     info "No /var/opt_overlay/work found — skipping."
 fi
@@ -250,7 +258,8 @@ else
     # homectl activate mounts the new home at /home/${REAL_USER}, which would
     # shadow any existing directory at that exact path.
     STAGED_HOME=""
-    if [[ "${OLD_HOME}" == "/home/${REAL_USER}" ]]; then
+    _HOMED_MOUNT="$(readlink -f "/home/${REAL_USER}" 2>/dev/null || printf '%s' "/home/${REAL_USER}")"
+    if [[ "${OLD_HOME}" == "/home/${REAL_USER}" || "${OLD_HOME}" == "${_HOMED_MOUNT}" ]]; then
         info "Old home is at /home/${REAL_USER} — bind-mounting to a stable path to prevent mount collision..."
         STAGED_HOME="/var/tmp/guaraos_migrate_${REAL_USER}_${TIMESTAMP}"
         mkdir -p "${STAGED_HOME}"

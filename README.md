@@ -107,9 +107,11 @@ On first boot, `guaraos-swap-setup.service`:
 `/var` is persistent across `bootc upgrade` — the subvolume and swapfile are created once and never touched again.
 
 > **Hibernation:** the swapfile must be ≥ your RAM. After first boot, get the correct resume offset with:
+>
 > ```bash
 > sudo btrfs inspect-internal map-swapfile -r /var/swap/swapfile
 > ```
+>
 > Then set the kernel parameters `resume=UUID=<your-btrfs-uuid>` and `resume_offset=<value>` (e.g. via `bootctl set-oneshot` or a kargs drop-in).
 > ⚠️ Do **not** use `filefrag` to get this value — on btrfs it returns the logical offset, not the device-physical offset the kernel needs. `btrfs inspect-internal map-swapfile` returns the correct device-physical offset already divided by page size.
 

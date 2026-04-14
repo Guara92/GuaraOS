@@ -74,5 +74,5 @@ RUN systemctl disable sddm.service || true && \
 # Preserve /opt contents for OverlayFS
 RUN mkdir -p /usr/lib/opt && \
     if [ -d /opt ] && [ "$(ls -A /opt)" ]; then \
-        mv /opt/* /usr/lib/opt/ || true; \
+        find /opt -mindepth 1 -maxdepth 1 -exec mv -t /usr/lib/opt/ {} + || true; \
     fi

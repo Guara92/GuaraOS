@@ -198,7 +198,8 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- Fonts ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="fonts" pacman -Sy --noconfirm --needed \
-    ttf-ms-fonts ttf-dejavu ttf-bitstream-vera ttf-ubuntu-font-family noto-fonts noto-fonts-cjk noto-fonts-emoji noto-color-emoji-fontconfig ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono awesome-terminal-fonts cantarell-fonts ttf-liberation ttf-opensans ttf-meslo-nerd && \
+    ttf-ms-fonts ttf-dejavu ttf-bitstream-vera ttf-ubuntu-font-family noto-fonts noto-fonts-cjk noto-fonts-emoji noto-color-emoji-fontconfig ttf-nerd-fonts-symbols ttf-nerd-fonts-symbols-mono awesome-terminal-fonts cantarell-fonts ttf-liberation ttf-opensans ttf-meslo-nerd \
+    inter-font ttf-jetbrains-mono-nerd ttf-firacode-nerd && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Filesystems & Storage ---
@@ -220,7 +221,8 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- Archiving & Compression ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="archiving" pacman -Sy --noconfirm --needed \
-    unp unarj unrar unzip zip bzip2 p7zip unace cpio sharutils cabextract rpmextract xz && \
+    unp unarj unrar unzip zip bzip2 p7zip unace cpio sharutils cabextract rpmextract xz \
+    innoextract unshield && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Printing & Scanning ---
@@ -232,7 +234,16 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- Audio Core ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="audio" pacman -Sy --noconfirm --needed \
-    pipewire-pulse pipewire-alsa pipewire-jack wireplumber pavucontrol alsa-utils alsa-plugins && \
+    pipewire-pulse pipewire-alsa pipewire-jack wireplumber pavucontrol alsa-utils alsa-plugins \
+    realtime-privileges && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Camera Support ---
+# libcamera: modern camera stack for webcams on Linux.
+# pipewire-libcamera: integrates libcamera devices into the PipeWire graph.
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="camera" pacman -Sy --noconfirm --needed \
+    libcamera pipewire-libcamera && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Firmware & Microcode ---
@@ -251,7 +262,8 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- Power & Hardware Management ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="hardware-management" pacman -Sy --noconfirm --needed \
-    power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs mousetweaks radeontool fwupd dmemcg-booster hwinfo dmidecode hdparm lsscsi sg3_utils mtools chwd hwdetect && \
+    power-profiles-daemon cpupower upower accountsservice rtkit xdg-user-dirs mousetweaks radeontool fwupd dmemcg-booster hwinfo dmidecode hdparm lsscsi sg3_utils mtools chwd hwdetect \
+    radeontop android-udev libva-utils && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Shells & Prompts ---
@@ -263,13 +275,14 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- CLI Utilities ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="cli-utilities" pacman -Sy --noconfirm --needed \
-    zoxide eza ripgrep tealdeer fd fzf jq btop iotop-c konsave conky sysstat htop fastfetch glances procs bottom rsync rclone wl-clipboard procps-ng curl wget file man-db man-pages openssh openssl pacman-contrib pkgfile plocate duf fsarchiver pv bpftune-git && \
+    zoxide eza ripgrep tealdeer fd fzf jq btop iotop-c konsave conky sysstat htop fastfetch glances procs bottom rsync rclone wl-clipboard procps-ng curl wget file man-db man-pages openssh openssl pacman-contrib pkgfile plocate duf fsarchiver pv bpftune-git \
+    bat git-delta lazygit lazydocker dust dog xh sd tokei hyperfine glow speedtest++ logrotate bpftop && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Text Editors & IDEs ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="text-editors-ides" pacman -Sy --noconfirm --needed \
-    nano nano-syntax-highlighting micro vi meld vim helix && \
+    nano nano-syntax-highlighting micro vi meld vim helix neovim && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Development Base ---
@@ -281,7 +294,8 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- Containers & Virtualization ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="containers" pacman -Sy --noconfirm --needed \
-    docker docker-compose podman podman-compose distrobox flatpak ptyxis && \
+    docker docker-compose podman podman-compose distrobox flatpak ptyxis \
+    docker-buildx docker-credential-secretservice crun && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Full Virtualization Stack ---
@@ -345,6 +359,40 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="development-languages" pacman -Sy --noconfirm --needed \
     nodejs npm rust go python-pip python-pipx ruby php cargo-binstall cargo-update python-defusedxml python-packaging uv topgrade && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Language Servers ---
+# One LSP per language already present in development-languages.
+# taplo-cli: TOML LSP + formatter — covers kargs.d and other TOML configs.
+# marksman: Markdown LSP — covers README, docs, AGENTS.md.
+# clangd is shipped by the clang package already pulled via base-devel deps.
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="language-servers" pacman -Sy --noconfirm --needed \
+    bash-language-server lua-language-server rust-analyzer gopls pyright \
+    typescript-language-server yaml-language-server taplo-cli marksman && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Linters & Formatters ---
+# shellcheck: static analysis for shell scripts (GuaraOS ships many bash scripts).
+# shfmt:   shell script formatter — pairs with shellcheck.
+# stylua:  opinionated Lua formatter — pairs with lua-language-server.
+# ruff:    ultra-fast Python linter + formatter (replaces flake8 + black + isort).
+# biome:   all-in-one JS/TS/JSON/CSS formatter + linter.
+# oxlint:  Rust-native JS/TS linter from the Oxc toolchain — extremely fast.
+# typos:   source-code spell checker for code and documentation.
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="linters-formatters" pacman -Sy --noconfirm --needed \
+    shellcheck shfmt stylua ruff biome oxlint typos && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- Tree-sitter Grammars ---
+# System-installed parsers used natively by Helix and optionally by Neovim.
+# tree-sitter-query: the meta-grammar for writing tree-sitter highlight/indent queries.
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="tree-sitter-grammars" pacman -Sy --noconfirm --needed \
+    tree-sitter tree-sitter-bash tree-sitter-c tree-sitter-javascript \
+    tree-sitter-lua tree-sitter-markdown tree-sitter-python \
+    tree-sitter-rust tree-sitter-query && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # ==========================================
@@ -437,7 +485,7 @@ RUN --mount=type=tmpfs,dst=/run \
 # Preserve /opt contents for OverlayFS
 RUN mkdir -p /usr/lib/opt && \
     if [ -d /opt ] && [ "$(ls -A /opt)" ]; then \
-        mv /opt/* /usr/lib/opt/ || true; \
+        find /opt -mindepth 1 -maxdepth 1 -exec mv -t /usr/lib/opt/ {} + || true; \
     fi
 
 # Final system setup and cleanup

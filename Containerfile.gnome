@@ -23,6 +23,39 @@ RUN COMPONENT_TAG="gnome-utilities" pacman -Sy --noconfirm --needed \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
+# --- GNOME Qt Integration ---
+# adwaita-qt5/qt6: bends Qt5/Qt6 apps (VLC, OBS, qBittorrent…) to match GNOME Adwaita visually.
+# colord-gtk: GTK3 color management widget — needed for display calibration and GIMP.
+# polkit-gnome: legacy polkit authentication agent required by gparted, virt-manager and others.
+# xdg-user-dirs-gtk: creates XDG user directories on first login and handles relocalisation.
+RUN COMPONENT_TAG="gnome-qt-integration" pacman -Sy --noconfirm --needed \
+    adwaita-qt5 adwaita-qt6 colord-gtk polkit-gnome xdg-user-dirs-gtk && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- GNOME GVFS Backends ---
+# Extra gvfs backends for Nautilus integration:
+#   gvfs-onedrive: Microsoft OneDrive mounts.
+#   gvfs-goa:      GNOME Online Accounts (Nextcloud, OwnCloud, Google Drive).
+#   gvfs-dnssd:    macOS/Bonjour file sharing and WebDAV.
+#   gvfs-wsdd:     Windows Web Services Dynamic Discovery (SMB network browser).
+#   gvfs-nfs:      NFS mount support.
+RUN COMPONENT_TAG="gnome-gvfs-backends" pacman -Sy --noconfirm --needed \
+    gvfs-onedrive gvfs-goa gvfs-dnssd gvfs-wsdd gvfs-nfs && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- GNOME Extra Apps ---
+# grilo-plugins: media source plugins for GNOME apps (GNOME Music, Totem).
+# journalview:   GUI log viewer for journald — more accessible than raw journalctl.
+# snapshot:      GNOME camera app (GNOME Circle).
+# baobab:        graphical disk usage analyser — especially useful for /var.
+# mangojuice:    modern GUI configurator for MangoHud (already present as a dep).
+RUN COMPONENT_TAG="gnome-apps-extra" pacman -Sy --noconfirm --needed \
+    grilo-plugins journalview snapshot baobab mangojuice && \
+    rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
 # --- GNOME Themes ---
 RUN COMPONENT_TAG="gnome-themes" pacman -Sy --noconfirm --needed \
     adw-gtk-theme cachyos-nord-gtk-theme-git flat-remix-gnome flat-remix-gtk && \
@@ -65,5 +98,5 @@ RUN systemctl disable sddm.service || true && \
 # (visual-studio-code-bin and others install here)
 RUN mkdir -p /usr/lib/opt && \
     if [ -d /opt ] && [ "$(ls -A /opt)" ]; then \
-        mv /opt/* /usr/lib/opt/ || true; \
+        find /opt -mindepth 1 -maxdepth 1 -exec mv -t /usr/lib/opt/ {} + || true; \
     fi

@@ -159,14 +159,11 @@ FROM ghcr.io/guara92/guaraos-base:{arch}
 Declared in `files/base/usr/lib/bootc/kargs.d/90-guaraos-optimizations.toml`:
 
 ```toml
-zswap.enabled=1              enable zswap compressed swap cache
-zswap.compressor=zstd        zstd compression (best ratio/speed tradeoff)
-zswap.zpool=zsmalloc         zsmalloc pool allocator (lower fragmentation than zbud)
-zswap.shrinker_enabled=1     proactively decompress pool pages back to RAM when RAM is free (Linux 6.8+)
 amd_pstate=active            AMD CPU P-state driver (better freq scaling)
 amdgpu.ppfeaturemask=0xffffffff  unlock all AMDGPU power features
 split_lock_detect=off        eliminate split-lock detection overhead
-nowatchdog / nmi_watchdog=0  disable watchdogs (latency reduction)
+nowatchdog                   disable hardware watchdog (latency reduction)
+nmi_watchdog=0               disable NMI watchdog (latency reduction)
 mitigations=off              disable Spectre/Meltdown mitigations (trusted hardware)
 sysrq_always_enabled=1
 usbcore.autosuspend=-1       disable USB autosuspend (gaming peripherals)
@@ -177,6 +174,10 @@ transparent_hugepage=madvise
 transparent_hugepage.defrag=defer+madvise
 skew_tick=1                  stagger per-CPU timer expiry — reduces lock contention on multi-CCD Ryzen
 threadirqs                   threaded IRQ handlers — IRQs schedulable with priority, reduces audio/frame latency
+zswap.enabled=1              enable zswap compressed swap cache
+zswap.compressor=zstd        zstd compression (best ratio/speed tradeoff)
+zswap.zpool=zsmalloc         zsmalloc pool allocator (lower fragmentation than zbud)
+zswap.shrinker_enabled=1     proactively decompress pool pages back to RAM when RAM is free (Linux 6.8+)
 ```
 
 ---
@@ -186,10 +187,12 @@ threadirqs                   threaded IRQ handlers — IRQs schedulable with pri
 Two-layer approach (username unknown at build time):
 
 **Layer 1 — build time** (`/usr/lib/plasmalogin/defaults.conf`, read-only):
+
 ```ini
 [General]
 DefaultSession=gamescope-session.desktop
 ```
+
 Pre-selects gamescope in the greeter. Active immediately, even before user creation.
 
 **Layer 2 — first boot** (`guaraos-gamestation-setup.service`):
@@ -198,11 +201,13 @@ Pre-selects gamescope in the greeter. Active immediately, even before user creat
 - Script finds first real user (`getent passwd`, UID 1000–65533).
 - If no user yet: exits 0, retries next boot.
 - Writes `/etc/plasmalogin.conf.d/autologin.conf`:
+
 ```ini
 [Autologin]
 User=<detected>
 Session=gamescope-session.desktop
 ```
+
 After first boot completes: subsequent boots skip the greeter entirely → straight into gamescope/Steam.
 
 ---

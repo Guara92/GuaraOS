@@ -21,9 +21,26 @@ SWAP_DIR="/var/swap"
 SWAP_FILE="${SWAP_DIR}/swapfile"
 SWAP_SIZE="32g"
 
-# Already done on a previous boot — nothing to do.
+# Idempotent fast-path: file already exists — ensure swap is active and persisted.
 if [ -f "${SWAP_FILE}" ]; then
-    echo "guaraos-swap-setup: ${SWAP_FILE} already exists, skipping."
+    echo "guaraos-swap-setup: ${SWAP_FILE} already exists — ensuring activation and persistence..."
+
+    # Re-activate if not currently swapped in (e.g. crash between mkswapfile and swapon).
+    if ! swapon --show | grep -qF "${SWAP_FILE}"; then
+        echo "guaraos-swap-setup: Swap not active — activating..."
+        swapon --priority 10 "${SWAP_FILE}"
+    fi
+
+    # Ensure fstab entry is present (e.g. crash before fstab write).
+    FSTAB="/etc/fstab"
+    if ! grep -qF "${SWAP_FILE}" "${FSTAB}" 2>/dev/null; then
+        echo "guaraos-swap-setup: Adding ${SWAP_FILE} to ${FSTAB}..."
+        printf '\n# GuaraOS swapfile — created by guaraos-swap-setup\n%s none swap defaults,pri=10 0 0\n' \
+            "${SWAP_FILE}" >> "${FSTAB}"
+    fi
+
+    echo "guaraos-swap-setup: Done. Swap active:"
+    swapon --show
     exit 0
 fi
 
