@@ -71,6 +71,15 @@ RUN --mount=type=cache,id=guaraos-builder-cache-${TARGET_CPU_MARCH},target=/var/
     cd /tmp/heroic && \
     sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
 
+# Build git-credential-manager-bin
+# Pre-compiled .NET binary — no .NET SDK needed at build time.
+# Provides cross-host credential storage backed by libsecret / GNOME keyring.
+RUN --mount=type=cache,id=guaraos-builder-cache-${TARGET_CPU_MARCH},target=/var/cache/pacman/pkg \
+    git clone https://aur.archlinux.org/git-credential-manager-bin.git /tmp/gcm && \
+    chown -R builduser:builduser /tmp/gcm && \
+    cd /tmp/gcm && \
+    sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
+
 # Clone bootcrew/mono to access their shared setup scripts
 RUN git clone https://github.com/bootcrew/mono.git /tmp/bootcrew-mono
 
@@ -391,6 +400,30 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
     tree-sitter tree-sitter-bash tree-sitter-c tree-sitter-javascript \
     tree-sitter-lua tree-sitter-markdown tree-sitter-python \
     tree-sitter-rust tree-sitter-query && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
+# --- MCP Servers (AI assistant integrations) ---
+# arch-ops-server  — bridges AI assistants with the Arch Linux ecosystem:
+#                    pacman, AUR, Arch Wiki, package search. Stdio transport.
+#                    Entry point: arch-ops-server (symlinked as arch-mcp).
+# linux-mcp-server — read-only Linux system diagnostics via MCP: systemd,
+#                    journald, filesystems, process info. Stdio transport.
+#                    Entry point: linux-mcp-server.
+#
+# Both are installed system-wide via uv tool into /usr/lib/guaraos-mcp.
+# Wrapper scripts land in /usr/local/bin/ so all users can invoke them.
+# The uv cache is cleaned after install to keep image layers small.
+#
+# Claude Desktop config seeded in /etc/skel/.config/Claude/ references
+# both entry points; users of other clients (Cursor, Zed, Continue) should
+# adapt their own config using the same absolute paths.
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    UV_TOOL_DIR=/usr/lib/guaraos-mcp UV_TOOL_BIN_DIR=/usr/local/bin \
+        uv tool install "git+https://github.com/nihalxkumar/arch-mcp.git" && \
+    UV_TOOL_DIR=/usr/lib/guaraos-mcp UV_TOOL_BIN_DIR=/usr/local/bin \
+        uv tool install linux-mcp-server && \
+    ln -sf /usr/local/bin/arch-ops-server /usr/local/bin/arch-mcp && \
+    rm -rf /root/.cache/uv && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # ==========================================
