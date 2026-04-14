@@ -15,11 +15,11 @@ trap 'rm -f "$TMP_LIST"' EXIT
 
 echo "[*] Fetching curated Flatpak list from Bazzite-DX..."
 # Fetch the file, strip comments (#), remove empty lines, and save to temp file
-curl -sSL "$BAZZITE_URL" | sed 's/#.*//' | grep -v '^\s*$' > "$TMP_LIST"
+curl -sSL "$BAZZITE_URL" | sed 's/#.*//' | grep -v '^[[:space:]]*$' > "$TMP_LIST"
 
 echo "[*] Merging GuaraOS custom Flatpaks..."
 if [ -f "$GUARAOS_LIST" ]; then
-    sed 's/#.*//' "$GUARAOS_LIST" | grep -v '^\s*$' >> "$TMP_LIST"
+    sed 's/#.*//' "$GUARAOS_LIST" | grep -v '^[[:space:]]*$' >> "$TMP_LIST"
 else
     echo "[!] Warning: Custom list $GUARAOS_LIST not found. Skipping."
 fi
@@ -40,7 +40,7 @@ if [[ "$EDIT_CHOICE" =~ ^[Yy]$ ]]; then
 fi
 
 # Read the (potentially edited) list into an array, stripping comments/blanks again just in case
-mapfile -t FLATPAKS < <(sed 's/#.*//' "$TMP_LIST" | grep -v '^\s*$')
+mapfile -t FLATPAKS < <(sed 's/#.*//' "$TMP_LIST" | grep -v '^[[:space:]]*$')
 
 if [ ${#FLATPAKS[@]} -eq 0 ]; then
     echo "[*] No Flatpaks selected for installation. Exiting."

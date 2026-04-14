@@ -89,7 +89,7 @@ This creates a homed user account, migrates preserved data (SSH keys, browser pr
 
 GuaraOS uses **zswap** — a compressed in-RAM page cache that sits in front of a disk-backed swapfile:
 
-```
+```text
 RAM
  └─ zswap pool  (~20% of RAM, zstd + zsmalloc + shrinker, in RAM)
       └─ /var/swap/swapfile  (32 GiB, on disk — evicted pages only)
@@ -110,7 +110,7 @@ On first boot, `guaraos-swap-setup.service`:
 
 On first boot, `guaraos-snapper-setup.service` configures snapper using the `guaraos` template:
 
-```
+```text
 Daily timeline snapshots of:
   /             → captures /etc (config changes) + /var/* (app state, flatpaks, containers)
   excluding:

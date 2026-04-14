@@ -1,7 +1,7 @@
 # Configuration
 
 registry := "ghcr.io"
-user := "Guara92"
+user := "guara92"
 
 # Default action
 default:
@@ -12,6 +12,11 @@ default:
 # Accepts an optional architecture (v3, v4, znver4) and flavor (base, gnome, gamestation).
 build arch='v3' flavor='base':
     @echo "Building guaraos-{{ flavor }}:{{ arch }}..."
+    @if [ "{{ flavor }}" != "base" ] && ! podman image exists "{{ registry }}/{{ user }}/guaraos-base:{{ arch }}"; then \
+        echo "ERROR: Base image {{ registry }}/{{ user }}/guaraos-base:{{ arch }} not found locally." >&2; \
+        echo "Build it first with: just build {{ arch }} base" >&2; \
+        exit 1; \
+    fi
     @if [ "{{ flavor }}" = "base" ]; then \
         podman build \
             --network=host \
@@ -69,7 +74,14 @@ verify arch='v3':
     #!/usr/bin/env bash
     set -euo pipefail
     REGISTRY="{{ registry }}/{{ user }}"
-    FLAVORS=("base" "gnome" "gamestation")
+    case "{{ arch }}" in
+        znver4) FLAVORS=("base" "gnome" "gamestation" "cosmic") ;;
+        v3)     FLAVORS=("base" "gamestation") ;;
+        *)
+            echo "Unsupported arch for verify: {{ arch }}" >&2
+            exit 1
+            ;;
+    esac
 
     if [ ! -f "guaraos.pub" ]; then
         echo "Error: guaraos.pub not found in the current directory."

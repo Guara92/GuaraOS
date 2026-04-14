@@ -207,17 +207,14 @@ else
 fi
 
 # 2.3 Remove the stale traditional user entry left over from Bazzite.
-#     homed users must NOT have a conflicting /etc/passwd entry — the
-#     nss-systemd module is the authoritative source for their identity.
-if getent passwd "${REAL_USER}" | grep -qv 'systemd-homed'; then
-    # Only remove if the entry is a traditional shadow entry, not a homed one
-    if grep -q "^${REAL_USER}:" /etc/passwd 2>/dev/null; then
-        # Preserve the UID for reference but remove the entry
-        OLD_UID=$(id -u "${REAL_USER}" 2>/dev/null || echo "unknown")
-        sed -i "/^${REAL_USER}:/d" /etc/passwd
-        sed -i "/^${REAL_USER}:/d" /etc/shadow 2>/dev/null || true
-        ok "Removed stale /etc/passwd entry for '${REAL_USER}' (old UID was ${OLD_UID})"
-    fi
+#     homed users are resolved via nss-systemd and must NOT have a /etc/passwd entry.
+#     Traditional shadow users have entries in /etc/passwd; homed users do not.
+if grep -q "^${REAL_USER}:" /etc/passwd 2>/dev/null; then
+    # Preserve the UID for reference but remove the entry
+    OLD_UID=$(id -u "${REAL_USER}" 2>/dev/null || echo "unknown")
+    sed -i "/^${REAL_USER}:/d" /etc/passwd
+    sed -i "/^${REAL_USER}:/d" /etc/shadow 2>/dev/null || true
+    ok "Removed stale /etc/passwd entry for '${REAL_USER}' (old UID was ${OLD_UID})"
 fi
 
 # 2.4 Ensure standard system groups exist for membership resolution.
@@ -274,7 +271,7 @@ else
                 DST_DIR="${NEW_HOME}/$(dirname "${item}")"
                 if [[ -e "$SRC" ]]; then
                     mkdir -p "$DST_DIR"
-                    rsync -a --delete "${SRC}" "${DST_DIR}/" 2>/dev/null \
+                    rsync -a "${SRC}" "${DST_DIR}/" 2>/dev/null \
                         && echo "    ✅ ${item}" \
                         || echo "    ⚠️  ${item} — rsync error (check manually)"
                 fi

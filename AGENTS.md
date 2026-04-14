@@ -36,7 +36,7 @@ Registry: `ghcr.io/guara92/guaraos-{flavor}:{arch}`
 
 ## Repository Layout
 
-```
+```text
 Containerfile.base          shared base — all flavors FROM this
 Containerfile.gnome         GNOME overlay
 Containerfile.gamestation   KDE Plasma + gamescope overlay
@@ -97,7 +97,7 @@ files/gamestation/          overlay COPY'd into the gamestation image (on top of
 
 ## Build Pipeline (multi-stage, Containerfile.base)
 
-```
+```text
 Stage 1: aur_builder  (cachyos-{arch})
   - Initialises pacman keyring + CachyOS + Chaotic-AUR repos
   - Builds AUR packages: scopebuddy-git, autofs, heroic-games-launcher-bin
@@ -116,7 +116,7 @@ Stage 3: system  (cachyos-{arch})   ← final image
 ```
 
 Flavor overlays (`Containerfile.gnome`, `Containerfile.gamestation`, `Containerfile.cosmic`) are:
-```
+```text
 FROM ghcr.io/guara92/guaraos-base:{arch}
   → install DE packages
   → COPY files/{flavor}/ overlay
@@ -152,7 +152,7 @@ FROM ghcr.io/guara92/guaraos-base:{arch}
 
 ### 4. Performance — Kernel Arguments
 Declared in `files/base/usr/lib/bootc/kargs.d/90-guaraos-optimizations.toml`:
-```
+```toml
 zswap.enabled=1              enable zswap compressed swap cache
 zswap.compressor=zstd        zstd compression (best ratio/speed tradeoff)
 zswap.zpool=zsmalloc         zsmalloc pool allocator (lower fragmentation than zbud)
