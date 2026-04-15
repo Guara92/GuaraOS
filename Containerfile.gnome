@@ -47,12 +47,11 @@ RUN COMPONENT_TAG="gnome-gvfs-backends" pacman -Sy --noconfirm --needed \
 
 # --- GNOME Extra Apps ---
 # grilo-plugins: media source plugins for GNOME apps (GNOME Music, Totem).
-# journalview:   GUI log viewer for journald — more accessible than raw journalctl.
 # snapshot:      GNOME camera app (GNOME Circle).
 # baobab:        graphical disk usage analyser — especially useful for /var.
 # mangojuice:    modern GUI configurator for MangoHud (already present as a dep).
 RUN COMPONENT_TAG="gnome-apps-extra" pacman -Sy --noconfirm --needed \
-    grilo-plugins journalview snapshot baobab mangojuice && \
+    grilo-plugins snapshot baobab mangojuice && \
     rm -rf /usr/lib/sysimage/cache/pacman/pkg/* && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
