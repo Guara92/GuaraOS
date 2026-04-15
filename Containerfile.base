@@ -89,6 +89,14 @@ RUN --mount=type=cache,id=guaraos-builder-cache-${TARGET_CPU_MARCH},target=/var/
     cd /tmp/docker-cred-ss && \
     sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
 
+# Build hellfire-browser-bin
+# AUR-only pre-compiled browser — not available in any pacman repo.
+RUN --mount=type=cache,id=guaraos-builder-cache-${TARGET_CPU_MARCH},target=/var/cache/pacman/pkg \
+    git clone https://aur.archlinux.org/hellfire-browser-bin.git /tmp/hellfire && \
+    chown -R builduser:builduser /tmp/hellfire && \
+    cd /tmp/hellfire && \
+    sudo -u builduser PKGDEST=/home/builduser/packages makepkg --noconfirm -s --skipinteg
+
 # Clone bootcrew/mono to access their shared setup scripts
 RUN git clone https://github.com/bootcrew/mono.git /tmp/bootcrew-mono
 
@@ -447,13 +455,13 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 # --- Gaming Core & Hardware Utilities ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="gaming-core" pacman -Sy --noconfirm --needed \
-    cachyos-gaming-meta cachyos-gaming-applications xorg-xwininfo xdotool yad winboat proton-cachyos wine gamescope-session-git sunshine lact coolercontrol openrgb openrgb-plugin-effects-git nvtop lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid goverlay pascube vkbasalt vkbasalt-cli protonup-qt steam lutris && \
+    cachyos-gaming-meta cachyos-gaming-applications xorg-xwininfo xdotool yad winboat proton-cachyos wine gamescope-session-git sunshine lact liquidctl coolercontrol openrgb openrgb-plugin-effects-git nvtop lsfg-vk game-devices-udev udev-joystick-blacklist-git waydroid goverlay pascube vkbasalt vkbasalt-cli protonup-qt steam lutris && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Web Browsers ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="web-browsers" pacman -Sy --noconfirm --needed \
-    hellfire-browser-bin cachyos-firefox-settings firefox && \
+    cachyos-firefox-settings firefox && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # --- Development Languages ---
