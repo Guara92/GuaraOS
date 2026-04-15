@@ -402,7 +402,7 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 #     Alchemist/Battlemage. Provides both the OpenCL ICD and the Level Zero
 #     driver implementation. Required by llama.cpp --opencl on Intel, Blender
 #     Cycles OpenCL, and the Intel Extension for PyTorch (IPEX) XPU backend.
-#   level-zero: Level Zero API loader. Low-level compute ABI used by oneAPI,
+#   level-zero-loader: Level Zero API loader. Low-level compute ABI used by oneAPI,
 #     SYCL runtimes, Intel IPEX XPU, OpenVINO, and BigDL-Nano on Arc.
 #
 # AMD — ROCm OpenCL + system management:
@@ -434,7 +434,7 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
     COMPONENT_TAG="gpu-compute" pacman -Sy --noconfirm --needed \
     intel-media-sdk igsc \
     ocl-icd lib32-ocl-icd clinfo \
-    intel-compute-runtime level-zero \
+    intel-compute-runtime level-zero-loader \
     rocm-opencl-runtime rocminfo rocm-smi-lib && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
