@@ -348,7 +348,11 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 
 # --- CATEGORY 4: Frequent Updates (Volatile) ---
 # --- Graphics & Drivers ---
+# mesa/lib32-mesa may have been pulled in as a dependency by earlier steps (e.g. plymouth).
+# --noconfirm answers N to "Remove mesa? [y/N]", so we force-remove them first with -Rdd
+# (skip dep checks) before installing mesa-git which conflicts with and provides mesa.
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    pacman -Rdd --noconfirm mesa lib32-mesa 2>/dev/null || true && \
     COMPONENT_TAG="graphics-drivers" pacman -Sy --noconfirm --needed \
     mesa-git lib32-mesa-git mesa-utils vulkan-icd-loader intel-media-driver libdisplay-info lib32-libdisplay-info && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
