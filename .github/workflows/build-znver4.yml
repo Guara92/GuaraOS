@@ -43,6 +43,13 @@ jobs:
         run: |
           # Lowercase the image uri
           echo "IMAGE_REGISTRY=${IMAGE_REGISTRY,,}" >> ${GITHUB_ENV}
+          # Set up a plain-file Docker auth store so docker login works headless
+          # (the default gnome-keyring/secret-service credential helper requires D-Bus + X11,
+          #  which is not available in the self-hosted runner environment)
+          DOCKER_CONFIG_DIR="${RUNNER_TEMP}/docker-config"
+          mkdir -p "${DOCKER_CONFIG_DIR}"
+          echo '{"credsStore":""}' > "${DOCKER_CONFIG_DIR}/config.json"
+          echo "DOCKER_CONFIG=${DOCKER_CONFIG_DIR}" >> "${GITHUB_ENV}"
 
       - name: Check Compatibility (znver4)
         id: check_compatibility
