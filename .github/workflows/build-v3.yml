@@ -197,6 +197,69 @@ jobs:
           sudo podman tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
           echo "::endgroup::"
 
+      - name: Rechunk and Publish guaraos-base
+        if: steps.check_compatibility.outputs.should_skip != 'true'
+        env:
+          IMAGE_TAGS: ${{ steps.metadata.outputs.tags }}
+          MAX_RETRIES: 3
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -x
+          IMAGE_REF="localhost/guaraos-base:${DEFAULT_TAG}"
+          ARCHIVE_PATH="${{ github.workspace }}/rechunked_base.tar"
+
+          echo "Rechunking base image..."
+          sudo podman run --rm --network=none \
+            --mount=type=image,source=$IMAGE_REF,target=/chunkah \
+            -e SOURCE_DATE_EPOCH=0 \
+            -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
+            quay.io/coreos/chunkah build --compressed --compression-level 6 --label containers.bootc=1 --max-layers 128 --prune /var/cache/ --prune /var/log/ --prune /tmp/ --prune /var/tmp/ > "$ARCHIVE_PATH"
+
+          sudo podman rmi -f "$IMAGE_REF"
+          sudo podman system prune -f
+          sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt
+          sudo rm -f "$ARCHIVE_PATH"
+
+          IMAGE_ID=$(cat /tmp/podman_load_output.txt | grep "Loaded image" | awk '{print $3}')
+          sudo podman tag "$IMAGE_ID" "$IMAGE_REF"
+          sudo podman tag "$IMAGE_ID" "${IMAGE_REGISTRY}/guaraos-base:${DEFAULT_TAG}"
+
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            echo "Pushing rechunked guaraos-base image..."
+            for tag in $IMAGE_TAGS; do
+              SUCCESS=false
+              for i in $(seq "${MAX_RETRIES}"); do
+                if sudo podman push --compression-format=zstd:chunked --compression-level=3 "$IMAGE_REF" "${IMAGE_REGISTRY}/guaraos-base:${tag}"; then
+                  SUCCESS=true
+                  break
+                fi
+                echo "Push failed, retrying in $((5 * i)) seconds..."
+                sleep $((5 * i))
+              done
+              if [ "$SUCCESS" = "false" ]; then
+                echo "::error::Failed to push guaraos-base tag $tag after $MAX_RETRIES retries."
+                exit 1
+              fi
+            done
+
+            SUCCESS_DIGEST=false
+            for i in $(seq "${MAX_RETRIES}"); do
+              if REMOTE_DIGEST=$(skopeo inspect --creds="${{ github.actor }}:${GITHUB_TOKEN}" --format '{{.Digest}}' "docker://${IMAGE_REGISTRY}/guaraos-base:${DEFAULT_TAG}"); then
+                SUCCESS_DIGEST=true
+                break
+              fi
+              echo "Failed to fetch remote digest, retrying in $((5 * i)) seconds..."
+              sleep $((5 * i))
+            done
+            if [ "$SUCCESS_DIGEST" = "false" ]; then
+              echo "::error::Failed to fetch remote digest for guaraos-base after ${MAX_RETRIES} retries."
+              exit 1
+            fi
+
+            echo "Captured remote digest: $REMOTE_DIGEST"
+            echo "guaraos-base=${REMOTE_DIGEST}" >> digests.env
+          fi
+
       - name: Build & Rechunk Flavor Images
         id: build_flavors
         if: steps.check_compatibility.outputs.should_skip != 'true'

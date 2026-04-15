@@ -55,7 +55,7 @@ first = ["custom_commands"]
 # These accumulate across sessions and can cause revokefs-fuse / glib
 # crashes during `flatpak update`. Safe to remove — they are regenerated
 # on demand.
-"Clean stale Flatpak FUSE caches" = "sudo rm -rf /var/tmp/flatpak-cache-* 2>/dev/null || true"
+"Clean stale Flatpak FUSE caches" = "sudo rm -rf -- /var/tmp/flatpak-cache-* || true"
 
 # ---------------------------------------------------------------------------
 # Custom commands — steps that have no native topgrade support on Arch

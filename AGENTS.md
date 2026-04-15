@@ -233,7 +233,8 @@ Beyond the autologin mechanism, the gamestation image ships additional performan
 | Bootc | `bootc` `dracut` `ostree` `skopeo` `containers-common` |
 | User management | `systemd-homed` `pam_systemd_home.so` |
 | Gaming | `cachyos-gaming-meta` `cachyos-gaming-applications` `gamescope-session-git` `proton-cachyos` `wine` `steam` `lutris` `mangohud` `goverlay` `lact` `coolercontrol` `openrgb` `sunshine` `waydroid` `protonup-qt` |
-| Graphics | `mesa-git` `lib32-mesa-git` `vulkan-radeon` `vulkan-intel` `vulkan-nouveau` + lib32 variants |
+| Graphics | `mesa-git` `lib32-mesa-git` (monolithic — bundles `vulkan-radeon`, `vulkan-intel`, `vulkan-nouveau`, `libva-mesa-driver`, `mesa-vdpau`, `opencl-mesa`/rusticl + all lib32 variants; conflicts with split packages of the same name) · `intel-media-driver` (iHD VA-API, Intel Arc — separate from Mesa) |
+| GPU Compute & HW Video | **Intel Arc:** `intel-media-sdk` (QSV — h264/hevc/av1 HW encode) · `intel-compute-runtime` (OpenCL 3.0 + Level Zero for Arc) · `level-zero` (Level Zero API loader — oneAPI/IPEX/OpenVINO) · `igsc` (GSC microcontroller firmware updater for Arc dGPUs — display/power/security firmware via `/dev/mei`) · **AMD:** `rocm-opencl-runtime` (OpenCL 3.0 via ROCm, RDNA1–RDNA4) · `rocminfo` (HSA agent diagnostics) · `rocm-smi-lib` (GPU metrics + `/dev/kfd` udev rules) · **Common:** `ocl-icd` `lib32-ocl-icd` (Khronos ICD loader) · `clinfo` (cross-vendor OpenCL diagnostics) |
 | Containers | `docker` `docker-compose` `podman` `podman-compose` `distrobox` `flatpak` |
 | Virtualization | `qemu-full` `libvirt` `virt-install` `virt-viewer` `edk2-ovmf` `swtpm` |
 | Performance | `bpftune-git` `dmemcg-booster` `ananicy-cpp` `scx_loader` |
