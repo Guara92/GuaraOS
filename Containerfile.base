@@ -356,8 +356,16 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
 #        After TX1, mesa-git is in the system and satisfies any "provides=mesa" dep.
 #   TX2: install the remaining graphics packages; mesa-utils/intel-media-driver now
 #        find their "mesa" dependency already satisfied by the installed mesa-git.
+#
+# CRITICAL: mesa and lib32-mesa MUST be removed in two separate pacman -Rdd calls.
+# If both are listed in a single invocation and one is not installed (lib32-mesa is
+# not pulled in by any step 28–49 package), pacman exits with "target not found"
+# and cancels the ENTIRE transaction — leaving mesa in place. The subsequent
+# `pacman -Sy mesa-git` then finds mesa still installed, prompts "Remove mesa?
+# [y/N]", and --noconfirm answers N, aborting the build.
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
-    pacman -Rdd --noconfirm mesa lib32-mesa 2>/dev/null || true && \
+    pacman -Rdd --noconfirm mesa 2>/dev/null || true && \
+    pacman -Rdd --noconfirm lib32-mesa 2>/dev/null || true && \
     pacman -Sy --noconfirm mesa-git lib32-mesa-git && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
