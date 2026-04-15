@@ -138,7 +138,11 @@ jobs:
           LOGIN_USER: ${{ github.actor }}
         run: |
           echo "${GITHUB_TOKEN}" | sudo podman login -u "${LOGIN_USER}" --password-stdin "ghcr.io"
-          echo "${GITHUB_TOKEN}" | docker login -u "${LOGIN_USER}" --password-stdin "ghcr.io" # For cosign
+          # Bypass Docker's secretservice credential helper (requires D-Bus + X11, unavailable headless).
+          # Write the auth token directly into the plain-file config set up in 'Prepare environment'.
+          AUTH=$(printf '%s:%s' "${LOGIN_USER}" "${GITHUB_TOKEN}" | base64 -w 0)
+          printf '{"auths":{"ghcr.io":{"auth":"%s"}}}\n' "${AUTH}" > "${DOCKER_CONFIG}/config.json"
+          unset AUTH
 
       - name: Restore Layer Cache
         if: steps.check_compatibility.outputs.should_skip != 'true' && github.event.inputs.no_cache != 'true'
