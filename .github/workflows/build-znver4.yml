@@ -22,6 +22,7 @@ env:
   IMAGE_LOGO_URL: "https://github.com/Guara92.png"
   IMAGE_REGISTRY: "ghcr.io/${{ github.repository_owner }}"
   DEFAULT_TAG: "znver4"
+  FLAVOR_LIST: "gnome gamestation cosmic"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref || github.run_id }}
@@ -131,6 +132,17 @@ jobs:
           echo "${GITHUB_TOKEN}" | sudo podman login -u "${LOGIN_USER}" --password-stdin "ghcr.io"
           echo "${GITHUB_TOKEN}" | docker login -u "${LOGIN_USER}" --password-stdin "ghcr.io" # For cosign
 
+      - name: Restore Layer Cache
+        if: steps.check_compatibility.outputs.should_skip != 'true' && github.event.inputs.no_cache != 'true'
+        run: |
+          echo "📦 Pre-pulling previous images for layer caching..."
+          sudo podman pull "${IMAGE_REGISTRY}/guaraos-base:${DEFAULT_TAG}" \
+            || echo "ℹ️  No cached guaraos-base image found — first build or cache expired."
+          for FLAVOR in ${FLAVOR_LIST}; do
+            sudo podman pull "${IMAGE_REGISTRY}/guaraos-${FLAVOR}:${DEFAULT_TAG}" \
+              || echo "ℹ️  No cached guaraos-${FLAVOR} image found — first build or cache expired."
+          done
+
       - name: Build Base Image
         id: build_base
         if: steps.check_compatibility.outputs.should_skip != 'true'
@@ -167,6 +179,12 @@ jobs:
             BUILD_ARGS+=("--build-arg" "WIPE_PKG_CACHE=true")
           fi
 
+          # Enable layer caching via the previously published GHCR image
+          # (gracefully skipped on the very first build when no cache image exists yet)
+          if [ "${{ github.event.inputs.no_cache }}" != "true" ]; then
+            BUILD_ARGS+=("--layers" "--cache-from" "${IMAGE_REGISTRY}/guaraos-base:${DEFAULT_TAG}")
+          fi
+
           echo "::group::Building base"
           CURRENT_IMAGE_NAME="guaraos-base"
           DOCKERFILE="Containerfile.base"
@@ -179,6 +197,70 @@ jobs:
           # Ensure the local base image is tagged properly so the DE overlays can layer onto it!
           sudo podman tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" "${IMAGE_REGISTRY}/${CURRENT_IMAGE_NAME}:${DEFAULT_TAG}"
           echo "::endgroup::"
+
+      - name: Rechunk and Publish guaraos-base
+        if: steps.check_compatibility.outputs.should_skip != 'true'
+        env:
+          IMAGE_TAGS: ${{ steps.metadata.outputs.tags }}
+          MAX_RETRIES: 3
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -x
+
+          IMAGE_REF="localhost/guaraos-base:${DEFAULT_TAG}"
+          ARCHIVE_PATH="${{ github.workspace }}/rechunked_base.tar"
+
+          echo "Rechunking base image..."
+          sudo podman run --rm --network=none \
+            --mount=type=image,source=$IMAGE_REF,target=/chunkah \
+            -e SOURCE_DATE_EPOCH=0 \
+            -e CHUNKAH_CONFIG_STR="$(sudo podman inspect $IMAGE_REF)" \
+            quay.io/coreos/chunkah build --compressed --compression-level 6 --label containers.bootc=1 --max-layers 128 --prune /var/cache/ --prune /var/log/ --prune /tmp/ --prune /var/tmp/ > "$ARCHIVE_PATH"
+
+          sudo podman rmi -f "$IMAGE_REF"
+          sudo podman system prune -f
+          sudo podman load -i "$ARCHIVE_PATH" > /tmp/podman_load_output.txt
+          sudo rm -f "$ARCHIVE_PATH"
+
+          IMAGE_ID=$(cat /tmp/podman_load_output.txt | grep "Loaded image" | awk '{print $3}')
+          sudo podman tag "$IMAGE_ID" "$IMAGE_REF"
+          sudo podman tag "$IMAGE_ID" "${IMAGE_REGISTRY}/guaraos-base:${DEFAULT_TAG}"
+
+          if [ "$GITHUB_EVENT_NAME" != "pull_request" ]; then
+            echo "Pushing rechunked guaraos-base image..."
+            for tag in $IMAGE_TAGS; do
+              SUCCESS=false
+              for i in $(seq "${MAX_RETRIES}"); do
+                if sudo podman push --compression-format=zstd:chunked --compression-level=3 "$IMAGE_REF" "${IMAGE_REGISTRY}/guaraos-base:${tag}"; then
+                  SUCCESS=true
+                  break
+                fi
+                echo "Push failed, retrying in $((5 * i)) seconds..."
+                sleep $((5 * i))
+              done
+              if [ "$SUCCESS" = "false" ]; then
+                echo "::error::Failed to push guaraos-base tag $tag after $MAX_RETRIES retries."
+                exit 1
+              fi
+            done
+
+            SUCCESS_DIGEST=false
+            for i in $(seq "${MAX_RETRIES}"); do
+              if REMOTE_DIGEST=$(skopeo inspect --creds="${{ github.actor }}:${GITHUB_TOKEN}" --format '{{.Digest}}' "docker://${IMAGE_REGISTRY}/guaraos-base:${DEFAULT_TAG}"); then
+                SUCCESS_DIGEST=true
+                break
+              fi
+              echo "Failed to fetch remote digest, retrying in $((5 * i)) seconds..."
+              sleep $((5 * i))
+            done
+            if [ "$SUCCESS_DIGEST" = "false" ]; then
+              echo "::error::Failed to fetch remote digest for guaraos-base after ${MAX_RETRIES} retries."
+              exit 1
+            fi
+
+            echo "Captured remote digest: $REMOTE_DIGEST"
+            echo "guaraos-base=${REMOTE_DIGEST}" >> digests.env
+          fi
 
       - name: Build & Rechunk Flavor Images
         id: build_flavors
@@ -207,16 +289,21 @@ jobs:
             BUILD_ARGS+=("--build-arg" "WIPE_PKG_CACHE=true")
           fi
 
-          FLAVORS=("gnome" "gamestation" "cosmic")
-
-          for FLAVOR in "${FLAVORS[@]}"; do
+          for FLAVOR in ${FLAVOR_LIST}; do
             echo "::group::Building $FLAVOR"
             CURRENT_IMAGE_NAME="guaraos-${FLAVOR}"
             DOCKERFILE="Containerfile.${FLAVOR}"
             FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$DEFAULT_TAG")
 
+            # Per-flavor layer cache: reuse the previously published GHCR image
+            if [ "${{ github.event.inputs.no_cache }}" != "true" ]; then
+              CACHE_FROM_ARG=("--layers" "--cache-from" "${IMAGE_REGISTRY}/guaraos-${FLAVOR}:${DEFAULT_TAG}")
+            else
+              CACHE_FROM_ARG=()
+            fi
+
             # For DE overlays, just build! They layer natively on the rechunked base.
-            sudo podman build "${BUILD_ARGS[@]}" "${FLAVOR_ARGS[@]}" \
+            sudo podman build "${BUILD_ARGS[@]}" "${FLAVOR_ARGS[@]}" "${CACHE_FROM_ARG[@]}" \
               --network=host \
               --tag "localhost/$CURRENT_IMAGE_NAME:$DEFAULT_TAG" -f "$DOCKERFILE" .
 
@@ -253,9 +340,7 @@ jobs:
         run: |
           set -ex
 
-          FLAVORS=("gnome" "gamestation" "cosmic")
-
-          for FLAVOR in "${FLAVORS[@]}"; do
+          for FLAVOR in ${FLAVOR_LIST}; do
             echo "::group::Pushing $FLAVOR"
             CURRENT_IMAGE_NAME="guaraos-${FLAVOR}"
 

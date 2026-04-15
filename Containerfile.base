@@ -344,6 +344,70 @@ RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU
     mesa-git lib32-mesa-git mesa-utils vulkan-icd-loader vulkan-mesa-layers vulkan-intel vulkan-radeon intel-media-driver vulkan-nouveau lib32-vulkan-mesa-layers lib32-vulkan-intel lib32-vulkan-radeon lib32-vulkan-nouveau libdisplay-info lib32-libdisplay-info && \
     if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
+# --- GPU Compute & Hardware Video Acceleration ---
+# IMPORTANT — mesa-git is a MONOLITHIC package (CachyOS packaging). It explicitly
+# provides AND conflicts with the standard Arch split packages: libva-mesa-driver,
+# mesa-vdpau, opencl-mesa and all lib32-* counterparts. Installing those alongside
+# mesa-git will always fail with a conflict error. VA-API (radeonsi VCN, iHD),
+# VDPAU, and rusticl OpenCL are already fully bundled inside mesa-git.
+#
+# Intel Arc — Quick Sync Video (QSV) hardware encode/decode:
+#   intel-media-sdk: Intel Media SDK + oneVPL compatibility shim (libmfx/libvpl).
+#     Enables h264_qsv, hevc_qsv, av1_qsv encoders in FFmpeg, OBS, Handbrake.
+#     Arc Alchemist/Battlemage support AV1 HW encode exclusively via this path.
+#   igsc: Intel Graphics System Controller firmware update tool. Updates the GSC
+#     microcontroller firmware on Intel Arc discrete GPUs — the GSC is responsible
+#     for display protection, power management, and hardware security on Arc dGPUs.
+#     Firmware images are already shipped by linux-firmware; igsc applies them.
+#     Usage: igsc fw-update --device /dev/mei<N> --image <gsc_firmware.bin>
+#
+# OpenCL ICD infrastructure (multi-vendor, must be installed alongside any impl):
+#   ocl-icd / lib32-ocl-icd: Khronos ICD loader. Discovers all installed OpenCL
+#     implementations via /etc/OpenCL/vendors/*.icd — allows Intel NEO, AMD ROCm,
+#     and Mesa rusticl to coexist without conflict.
+#   clinfo: cross-vendor OpenCL diagnostics — lists all platforms, devices, caps.
+#
+# Intel Arc — OpenCL 3.0 + Level Zero (GPU compute, AI workloads):
+#   intel-compute-runtime: Intel's NEO OpenCL 3.0 runtime for Gen9–Arc
+#     Alchemist/Battlemage. Provides both the OpenCL ICD and the Level Zero
+#     driver implementation. Required by llama.cpp --opencl on Intel, Blender
+#     Cycles OpenCL, and the Intel Extension for PyTorch (IPEX) XPU backend.
+#   level-zero: Level Zero API loader. Low-level compute ABI used by oneAPI,
+#     SYCL runtimes, Intel IPEX XPU, OpenVINO, and BigDL-Nano on Arc.
+#
+# AMD — ROCm OpenCL + system management:
+#   rocm-opencl-runtime: OpenCL 3.0 via ROCm for RDNA1–RDNA4 (gfx9+ family).
+#     Enables GPU-accelerated inference with llama.cpp --opencl, Blender HIP,
+#     Stable Diffusion via torch-rocm, and any OpenCL-capable ML workload.
+#   rocminfo: ROCm HSA agent enumeration — confirms /dev/kfd visibility and
+#     reports compute unit count, VRAM, and firmware version.
+#   rocm-smi-lib: ROCm System Management Interface. Installs udev rules for
+#     /dev/kfd (render group access) and exposes GPU metrics, power caps, and
+#     clock/fan control used by radeontop, nvtop, and the rocm-smi CLI.
+#
+# Mesa — rusticl OpenCL, Vulkan Video, Zink (all bundled in mesa-git):
+#   rusticl: CachyOS mesa-git is built with -D gallium-rusticl=true, providing
+#     OpenCL 3.0 via Gallium for AMD (radeonsi) and Intel (iris). No extra package
+#     needed. Enable per-driver at runtime: RUSTICL_ENABLE=radeonsi,iris <app>
+#   Vulkan Video (VK_KHR_video_decode/encode_*): hardware-accelerated video
+#     codec path over Vulkan. Already compiled into mesa-git for both RADV
+#     (AMD RX 5000+: H264/H265/AV1 decode; RDNA3+ adds H264/H265 encode) and
+#     ANV (Intel Arc: H264/H265/AV1 decode). No extra package needed.
+#     FFmpeg: -hwaccel vulkan -hwaccel_output_format vulkan
+#     MPV:    --hwdec=vulkan (or vulkan-copy for CPU-accessible frames)
+#   Zink: OpenGL-over-Vulkan Gallium driver already compiled into mesa-git.
+#     Lets any OpenGL app run on top of RADV or ANV with no extra package.
+#     Enable per-app: MESA_LOADER_DRIVER_OVERRIDE=zink <app>
+#     Useful for testing, for hardware missing a native GL driver, or when
+#     the Vulkan path offers better performance/compatibility for a title.
+RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    COMPONENT_TAG="gpu-compute" pacman -Sy --noconfirm --needed \
+    intel-media-sdk igsc \
+    ocl-icd lib32-ocl-icd clinfo \
+    intel-compute-runtime level-zero \
+    rocm-opencl-runtime rocminfo rocm-smi-lib && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
+
 # --- Media & Video ---
 RUN --mount=type=tmpfs,dst=/run --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
     COMPONENT_TAG="media-video" pacman -Sy --noconfirm --needed \
@@ -450,6 +514,11 @@ RUN --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysi
 # We capture the final settled state of /etc/pam.d and /etc/nsswitch.conf into
 # a stable read-only path under /usr so guara-migrate can restore them on a
 # post-bootc-switch system where /etc still carries old Fedora/Bazzite configs.
+#
+# No manual pam_systemd_home.so injection is needed: CachyOS pambase already
+# ships /etc/pam.d/system-auth with the correct -auth [success=2 default=ignore]
+# and -session optional pam_systemd_home.so entries out of the box (verified
+# against pambase 20250719-1 — pacman -Qkk pambase shows the file is unmodified).
 RUN mkdir -p /usr/share/guaraos/pristine/etc && \
     cp -af /etc/pam.d /usr/share/guaraos/pristine/etc/pam.d && \
     cp -af /etc/nsswitch.conf /usr/share/guaraos/pristine/etc/nsswitch.conf
@@ -489,7 +558,7 @@ RUN mkdir -p /etc/containers/containers.conf.d && \
     printf '[containers]\nlabel = false\n' > /etc/containers/containers.conf.d/01-no-selinux.conf
 
 # Enable required systemd services
-RUN systemctl enable var-opt.mount && \
+RUN systemctl enable opt.mount && \
     systemctl enable NetworkManager.service && \
     systemctl enable systemd-resolved.service && \
     systemctl enable dbus-broker.service && \
