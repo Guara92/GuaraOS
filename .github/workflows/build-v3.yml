@@ -301,7 +301,7 @@ jobs:
             echo "::group::Building $FLAVOR"
             CURRENT_IMAGE_NAME="guaraos-${FLAVOR}"
             DOCKERFILE="Containerfile.${FLAVOR}"
-            FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$DEFAULT_TAG")
+            FLAVOR_ARGS=("--build-arg" "BASE_IMAGE_TAG=$DEFAULT_TAG" "--build-arg" "TARGET_CPU_MARCH=$MARCH" "--build-arg" "CACHEBUST=$(date +%s)")
 
             # Per-flavor layer cache via the GHCR-backed Buildah cache repository.
             # --cache-to is skipped on pull_request to avoid polluting cache with unmerged code.

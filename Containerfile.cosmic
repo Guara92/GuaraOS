@@ -5,6 +5,7 @@
 ARG BASE_IMAGE_TAG=latest
 FROM ghcr.io/guara92/guaraos-base:${BASE_IMAGE_TAG}
 ARG BASE_IMAGE_TAG
+ARG TARGET_CPU_MARCH=v3
 
 # ==========================================
 # MASTER PACKAGE INSTALLATION
@@ -36,6 +37,26 @@ RUN systemctl disable sddm.service || true && \
     systemctl disable gdm.service || true && \
     systemctl disable plasmalogin.service || true && \
     systemctl enable cosmic-greeter.service
+
+# ==========================================
+# Final system-wide upgrade (always runs — invalidated by CACHEBUST on every build)
+# Updates ALL installed packages from official repos AND AUR via paru.
+# ARG CACHEBUST is placed here (not at the top) so only this step and the ones
+# below are invalidated — all DE install steps above remain cached.
+# ==========================================
+ARG CACHEBUST
+RUN --mount=type=tmpfs,dst=/run \
+    --mount=type=cache,id=guaraos-cache-${TARGET_CPU_MARCH},target=/usr/lib/sysimage/cache/pacman/pkg \
+    useradd -m -u 65499 guaraos-updater && \
+    echo "guaraos-updater ALL=(ALL) NOPASSWD: ALL" > /etc/sudoers.d/guaraos-updater && \
+    sudo -u guaraos-updater \
+        HOME=/home/guaraos-updater \
+        XDG_CACHE_HOME=/home/guaraos-updater/.cache \
+        paru --noconfirm --needed --removemake --skipreview -Syu && \
+    userdel -r guaraos-updater && \
+    sed -i '/^guaraos-updater:/d' /etc/subuid /etc/subgid 2>/dev/null || true && \
+    rm -f /etc/sudoers.d/guaraos-updater && \
+    if [ -e /usr/etc ]; then if [ ! -L /usr/etc ] && [ -n "$(ls -A /usr/etc 2>/dev/null)" ]; then cp -a /usr/etc/* /etc/ 2>/dev/null || true; fi && rm -rf /usr/etc; fi
 
 # Preserve /opt contents for OverlayFS
 # (visual-studio-code-bin and others install here)
