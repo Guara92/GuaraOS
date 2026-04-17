@@ -666,62 +666,6 @@ LABEL containers.bootc=1
 # into layers based on how frequently each is expected to change.
 # Without this, chunkah emits: WARN no stability data available, packing may be suboptimal
 # Ref: https://github.com/coreos/chunkah#customizing-the-layers
-RUN python3 -c "
-import os
-
-INTERVALS = {
-    'default-base':          'quarterly',
-    'arch-optimizations':    'monthly',
-    'pacman-config':         'quarterly',
-    'system-core':           'quarterly',
-    'bootc':                 'quarterly',
-    'fonts':                 'yearly',
-    'filesystems':           'yearly',
-    'btrfs-snapshots':       'monthly',
-    'archiving':             'yearly',
-    'printing-scanning':     'quarterly',
-    'audio':                 'monthly',
-    'camera':                'quarterly',
-    'firmware':              'biweekly',
-    'networking':            'monthly',
-    'hardware-management':   'quarterly',
-    'shells':                'monthly',
-    'cli-utilities':         'biweekly',
-    'text-editors-ides':     'monthly',
-    'devel-base':            'monthly',
-    'containers':            'monthly',
-    'virtualization':        'quarterly',
-    'schedulers':            'biweekly',
-    'desktop-integration':   'monthly',
-    'cachyos-settings':      'monthly',
-    'themes-aesthetics':     'quarterly',
-    'graphics-drivers':      'biweekly',
-    'gpu-compute':           'biweekly',
-    'media-video':           'monthly',
-    'gaming-core':           'weekly',
-    'web-browsers':          'weekly',
-    'development-languages': 'monthly',
-    'language-servers':      'monthly',
-    'linters-formatters':    'monthly',
-    'aur-packages':          'weekly',
-    'homebrew':              'weekly',
-}
-
-for root, dirs, files in os.walk('/usr'):
-    for fname in files:
-        fpath = os.path.join(root, fname)
-        if os.path.islink(fpath):
-            continue
-        try:
-            comp = os.getxattr(fpath, 'user.component', follow_symlinks=False).decode()
-        except OSError:
-            continue
-        interval = INTERVALS.get(comp)
-        if interval:
-            try:
-                os.setxattr(fpath, 'user.update-interval', interval.encode(), follow_symlinks=False)
-            except OSError:
-                pass
-"
+RUN /usr/libexec/guaraos-set-update-intervals
 
 RUN bootc container lint

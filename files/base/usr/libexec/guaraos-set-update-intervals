@@ -1,0 +1,123 @@
+#!/usr/bin/env python3
+"""
+guaraos-set-update-intervals — chunkah stability data helper
+
+Sets the user.update-interval xattr on every regular file under /usr that
+already carries a user.component xattr (set by the assign-usercomponent ALPM
+hook during package installation).
+
+chunkah uses this xattr to understand how frequently each component changes,
+which lets it group components with similar update cadences into the same OCI
+layer.  Without it, chunkah warns:
+    WARN no stability data available, packing may be suboptimal
+
+Ref: https://github.com/coreos/chunkah#customizing-the-layers
+"""
+
+import os
+import sys
+
+# Map COMPONENT_TAG → user.update-interval value.
+# Values accepted by chunkah: daily, weekly, biweekly, monthly, quarterly, yearly
+# (or an integer number of days).
+INTERVALS: dict[str, str] = {
+    # ── nearly static ────────────────────────────────────────────────────────
+    "fonts":                 "yearly",
+    "filesystems":           "yearly",
+    "archiving":             "yearly",
+
+    # ── change only with major releases ──────────────────────────────────────
+    "system-core":           "quarterly",   # systemd, dbus, kernel
+    "bootc":                 "quarterly",   # bootc, dracut, ostree
+    "pacman-config":         "quarterly",
+    "printing-scanning":     "quarterly",
+    "camera":                "quarterly",
+    "hardware-management":   "quarterly",   # fwupd, upower, chwd
+    "virtualization":        "quarterly",   # qemu, libvirt, edk2-ovmf
+    "desktop-integration":   "quarterly",   # gtk3/4, xdg-utils
+    "themes-aesthetics":     "quarterly",
+
+    # ── typical monthly release cadence ──────────────────────────────────────
+    "arch-optimizations":    "monthly",
+    "default-base":          "monthly",
+    "btrfs-snapshots":       "monthly",     # snapper, btrfs-assistant
+    "audio":                 "monthly",     # pipewire, wireplumber
+    "networking":            "monthly",     # NetworkManager, bluez
+    "shells":                "monthly",
+    "text-editors-ides":     "monthly",
+    "devel-base":            "monthly",     # git, base-devel, paru
+    "containers":            "monthly",     # docker, podman, distrobox
+    "cachyos-settings":      "monthly",
+    "media-video":           "monthly",
+    "gpu-compute":           "monthly",     # rocm, intel-compute-runtime
+    "development-languages": "monthly",
+    "language-servers":      "monthly",
+    "linters-formatters":    "monthly",
+
+    # ── biweekly: fast-moving AUR / git packages ──────────────────────────────
+    "firmware":              "biweekly",    # linux-firmware updates often
+    "schedulers":            "biweekly",    # scx-scheds-git, scx-tools-git
+    "graphics-drivers":      "biweekly",    # mesa-git, lib32-mesa-git
+    "cli-utilities":         "biweekly",    # ripgrep, fd, bat, etc.
+
+    # ── weekly: frequently updated end-user software ─────────────────────────
+    "gaming-core":           "weekly",      # steam, lutris, protonup-qt, proton
+    "web-browsers":          "weekly",      # firefox
+    "aur-packages":          "weekly",      # heroic, scopebuddy-git, etc.
+    "homebrew":              "weekly",
+}
+
+XATTR_COMPONENT    = b"user.component"
+XATTR_UPDATE_INTV  = b"user.update-interval"
+
+
+def main() -> int:
+    tagged = 0
+    skipped = 0
+    errors = 0
+
+    for dirpath, _dirnames, filenames in os.walk("/usr"):
+        for fname in filenames:
+            fpath = os.path.join(dirpath, fname)
+
+            # Skip symlinks — xattrs live on the target, not the link
+            if os.path.islink(fpath):
+                continue
+
+            # Read existing user.component
+            try:
+                raw = os.getxattr(fpath, XATTR_COMPONENT, follow_symlinks=False)
+                comp = raw.decode()
+            except OSError:
+                # File has no user.component xattr → nothing to do
+                skipped += 1
+                continue
+
+            interval = INTERVALS.get(comp)
+            if not interval:
+                # Component exists but has no entry in our map; leave it alone
+                # so chunkah falls back to its own default (weekly).
+                skipped += 1
+                continue
+
+            try:
+                os.setxattr(
+                    fpath,
+                    XATTR_UPDATE_INTV,
+                    interval.encode(),
+                    follow_symlinks=False,
+                )
+                tagged += 1
+            except OSError as exc:
+                print(f"warning: could not set xattr on {fpath}: {exc}", file=sys.stderr)
+                errors += 1
+
+    print(
+        f"guaraos-set-update-intervals: "
+        f"tagged={tagged}  skipped={skipped}  errors={errors}"
+    )
+    return 0 if errors == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
