@@ -246,7 +246,7 @@ Beyond the autologin mechanism, the gamestation image ships additional performan
 | Shell | `zoxide` `eza` `starship` `atuin` `fzf` `ripgrep` `fd` `btop` `fastfetch` |
 | Brew | via `ublue-os/brew` + `brew-setup.service` |
 | AUR (built) | `scopebuddy-git` `autofs` `heroic-games-launcher-bin` |
-| GNOME extras | `easyeffects` `lsp-plugins` `gdm-settings` `flat-remix-gnome` `flat-remix-gtk` |
+| GNOME extras | `easyeffects` `lsp-plugins` `gdm-settings` |
 
 ---
 
